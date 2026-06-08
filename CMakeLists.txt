@@ -16,9 +16,14 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 DBus)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUDEV REQUIRED IMPORTED_TARGET libudev)
 
+option(KDE_OSK_BUILD_FCITX5_BRIDGE "Build the optional fcitx5 desktop focus bridge" ON)
 option(KDE_OSK_USE_LAYER_SHELL "Use LayerShellQt for Wayland keyboard window placement" ON)
 if(KDE_OSK_USE_LAYER_SHELL)
     find_package(LayerShellQt REQUIRED)
+endif()
+if(KDE_OSK_BUILD_FCITX5_BRIDGE)
+    find_package(Fcitx5Core QUIET)
+    find_package(Fcitx5Utils QUIET)
 endif()
 
 qt_standard_project_setup(REQUIRES 6.4)
@@ -45,6 +50,8 @@ qt_add_executable(kde-osk-shell
     src/UInputKeyboard.h
     src/ShellWindowAdapter.cpp
     src/ShellWindowAdapter.h
+    src/ShellSettings.cpp
+    src/ShellSettings.h
 )
 
 qt_add_qml_module(kde-osk-shell
@@ -74,6 +81,28 @@ elseif(KDE_OSK_USE_LAYER_SHELL)
     message(FATAL_ERROR "LayerShellQt was found, but target LayerShellQt::Interface is missing.")
 else()
     message(WARNING "LayerShellQt was not found. KDE OSK will build, but Wayland positioning and non-focus behavior will be limited.")
+endif()
+
+if(KDE_OSK_BUILD_FCITX5_BRIDGE AND TARGET Fcitx5::Core AND TARGET Fcitx5::Utils)
+    add_library(fcitx5-kde-osk-bridge MODULE
+        src/fcitx5-bridge/KdeOskBridge.cpp
+    )
+    target_link_libraries(fcitx5-kde-osk-bridge
+        PRIVATE
+            Fcitx5::Core
+            Fcitx5::Utils
+    )
+    set_target_properties(fcitx5-kde-osk-bridge PROPERTIES
+        PREFIX "lib"
+    )
+    install(TARGETS fcitx5-kde-osk-bridge
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/fcitx5
+    )
+    install(FILES data/fcitx5-kde-osk-bridge.conf
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/fcitx5/addon
+    )
+elseif(KDE_OSK_BUILD_FCITX5_BRIDGE)
+    message(WARNING "Fcitx5 development files were not found. The fcitx5 bridge will not be built.")
 endif()
 
 install(TARGETS kde-osk-shell

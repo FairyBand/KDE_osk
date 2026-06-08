@@ -37,7 +37,7 @@ Expected:
 - It does not steal focus from the active application.
 - The `Input` and `Full` layout buttons switch layouts.
 - The `Bottom`, `Top`, and `Float` window modes move the keyboard.
-- In `Float` mode, dragging the small handle in the toolbar moves the keyboard.
+- In `Float` mode, dragging the toolbar moves the keyboard.
 - Pressing `Hide` hides the window.
 
 ## Basic Typing Test
@@ -92,6 +92,22 @@ To bypass hardware keyboard suppression during development:
 ```sh
 busctl --user call org.kde.KdeOsk /Keyboard org.kde.KdeOsk.Keyboard forceShowKeyboard
 ```
+
+To simulate focus in a text field and provide its screen rectangle:
+
+```sh
+# Focus near the top of the screen; remembered dock mode should move to bottom.
+busctl --user call org.kde.KdeOsk /Keyboard org.kde.KdeOsk.Keyboard setTextFocusRect biiii true 200 100 600 40
+
+# Focus near the bottom of the screen; remembered dock mode should move to top.
+busctl --user call org.kde.KdeOsk /Keyboard org.kde.KdeOsk.Keyboard setTextFocusRect biiii true 200 900 600 40
+
+# Focus left the text field.
+busctl --user call org.kde.KdeOsk /Keyboard org.kde.KdeOsk.Keyboard setTextFocusRect biiii false 0 0 0 0
+```
+
+The shell remembers the last selected edge/floating mode, keyboard layout mode,
+and floating position through `QSettings`.
 
 ## Hardware Keyboard Policy
 

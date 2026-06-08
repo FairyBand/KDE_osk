@@ -44,6 +44,31 @@ QString KeyboardController::inputBackendError() const
     return m_inputKeyboard->lastError();
 }
 
+bool KeyboardController::textFocusActive() const
+{
+    return m_textFocusActive;
+}
+
+int KeyboardController::focusRectX() const
+{
+    return m_focusRect.x();
+}
+
+int KeyboardController::focusRectY() const
+{
+    return m_focusRect.y();
+}
+
+int KeyboardController::focusRectWidth() const
+{
+    return m_focusRect.width();
+}
+
+int KeyboardController::focusRectHeight() const
+{
+    return m_focusRect.height();
+}
+
 bool KeyboardController::registerDBus()
 {
     QDBusConnection bus = QDBusConnection::sessionBus();
@@ -81,6 +106,28 @@ void KeyboardController::setTextFocusActive(bool active)
     }
 
     m_textFocusActive = active;
+    emit textFocusActiveChanged(m_textFocusActive);
+    updateVisibilityFromPolicy();
+}
+
+void KeyboardController::setTextFocusRect(bool active, int x, int y, int width, int height)
+{
+    const QRect rect(x, y, qMax(0, width), qMax(0, height));
+    const bool focusChanged = m_textFocusActive != active;
+    const bool rectChanged = m_focusRect != rect;
+
+    if (!focusChanged && !rectChanged) {
+        return;
+    }
+
+    m_textFocusActive = active;
+    if (rectChanged) {
+        m_focusRect = rect;
+        emit focusRectChanged();
+    }
+    if (focusChanged) {
+        emit textFocusActiveChanged(m_textFocusActive);
+    }
     updateVisibilityFromPolicy();
 }
 

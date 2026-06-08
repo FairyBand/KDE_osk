@@ -38,11 +38,27 @@ Hides the keyboard immediately.
 Updates focus-driven visibility. Desktop, lock-screen, and greeter integrations
 should call this when their controlled text field gains or loses focus.
 
+`setTextFocusRect(bool active, int x, int y, int width, int height)`
+
+Updates focus-driven visibility and the focused text-field rectangle in screen
+coordinates. When the remembered shell mode is `float`, the shell keeps the
+remembered floating position. When the remembered mode is `dockTop` or
+`dockBottom`, the shell automatically chooses the opposite screen edge so the
+focused text field stays visible.
+
 ## Properties
 
 `visible: bool`
 
 Current shell visibility.
+
+`textFocusActive: bool`
+
+Whether an integration currently reports editable text focus.
+
+`focusRectX`, `focusRectY`, `focusRectWidth`, `focusRectHeight: int`
+
+The last focused text-field rectangle in screen coordinates.
 
 `autoShowEnabled: bool`
 
@@ -71,6 +87,14 @@ Emitted when the shell appears or disappears.
 `autoShowEnabledChanged(bool enabled)`
 
 Emitted when the automatic visibility policy changes.
+
+`textFocusActiveChanged(bool active)`
+
+Emitted when focus-driven visibility state changes.
+
+`focusRectChanged()`
+
+Emitted when the focused text-field rectangle changes.
 
 `commitTextRequested(string text)`
 

@@ -27,6 +27,7 @@ Rectangle {
 
     signal autoShowToggled(bool enabled)
     signal ignoreHardwareKeyboardToggled(bool ignore)
+    signal keyboardModeRequested(string mode)
     signal windowModeRequested(string mode)
     signal floatingDragStarted()
     signal floatingDragMoved(real dx, real dy)
@@ -203,7 +204,7 @@ Rectangle {
                     checkable: true
                     checked: root.keyboardMode === "typing"
                     ButtonGroup.group: keyboardModeGroup
-                    onClicked: root.keyboardMode = "typing"
+                    onClicked: root.keyboardModeRequested("typing")
                 }
 
                 ToolButton {
@@ -211,7 +212,7 @@ Rectangle {
                     checkable: true
                     checked: root.keyboardMode === "full"
                     ButtonGroup.group: keyboardModeGroup
-                    onClicked: root.keyboardMode = "full"
+                    onClicked: root.keyboardModeRequested("full")
                 }
             }
 

@@ -8,7 +8,19 @@
     <method name="setTextFocusActive">
       <arg name="active" type="b" direction="in"/>
     </method>
+    <method name="setTextFocusRect">
+      <arg name="active" type="b" direction="in"/>
+      <arg name="x" type="i" direction="in"/>
+      <arg name="y" type="i" direction="in"/>
+      <arg name="width" type="i" direction="in"/>
+      <arg name="height" type="i" direction="in"/>
+    </method>
     <property name="visible" type="b" access="read"/>
+    <property name="textFocusActive" type="b" access="read"/>
+    <property name="focusRectX" type="i" access="read"/>
+    <property name="focusRectY" type="i" access="read"/>
+    <property name="focusRectWidth" type="i" access="read"/>
+    <property name="focusRectHeight" type="i" access="read"/>
     <property name="autoShowEnabled" type="b" access="readwrite"/>
     <property name="ignoreHardwareKeyboard" type="b" access="readwrite"/>
     <property name="inputBackendAvailable" type="b" access="read"/>
@@ -19,6 +31,10 @@
     <signal name="autoShowEnabledChanged">
       <arg name="enabled" type="b"/>
     </signal>
+    <signal name="textFocusActiveChanged">
+      <arg name="active" type="b"/>
+    </signal>
+    <signal name="focusRectChanged"/>
     <signal name="commitTextRequested">
       <arg name="text" type="s"/>
     </signal>

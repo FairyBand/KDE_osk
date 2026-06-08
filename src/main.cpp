@@ -1,6 +1,7 @@
 #include "HardwareKeyboardMonitor.h"
 #include "KeyboardController.h"
 #include "ShellWindowAdapter.h"
+#include "ShellSettings.h"
 #include "UInputKeyboard.h"
 
 #include <QCommandLineParser>
@@ -37,6 +38,7 @@ int main(int argc, char *argv[])
     HardwareKeyboardMonitor hardwareKeyboardMonitor;
     UInputKeyboard inputKeyboard;
     ShellWindowAdapter shellWindowAdapter;
+    ShellSettings shellSettings;
     KeyboardController controller(&hardwareKeyboardMonitor, &inputKeyboard);
     if (parser.isSet(forceShowOption)) {
         controller.setIgnoreHardwareKeyboard(true);
@@ -49,6 +51,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("keyboardController"), &controller);
     engine.rootContext()->setContextProperty(QStringLiteral("hardwareKeyboardMonitor"), &hardwareKeyboardMonitor);
     engine.rootContext()->setContextProperty(QStringLiteral("shellWindowAdapter"), &shellWindowAdapter);
+    engine.rootContext()->setContextProperty(QStringLiteral("shellSettings"), &shellSettings);
 
     QObject::connect(
         &engine,
