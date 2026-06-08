@@ -38,16 +38,17 @@ See [docs/DBUS.md](docs/DBUS.md) for the first shell control API.
 
 ## Build
 
-Linux with Qt 6, libudev, and the kernel uinput device is required.
+Linux with Qt 6, libudev, KDE LayerShellQt, and the kernel uinput device is
+required for the Wayland test path.
 
 Typical dependencies:
 
 ```sh
 # Arch Linux
-sudo pacman -S cmake extra-cmake-modules qt6-base qt6-declarative qt6-quickcontrols2 qt6-wayland systemd
+sudo pacman -S cmake extra-cmake-modules qt6-base qt6-declarative qt6-quickcontrols2 qt6-wayland layer-shell-qt systemd
 
 # Debian/Ubuntu family
-sudo apt install cmake qt6-base-dev qt6-declarative-dev qml6-module-qtquick-controls qt6-wayland libudev-dev pkg-config
+sudo apt install cmake qt6-base-dev qt6-declarative-dev qml6-module-qtquick-controls qt6-wayland libudev-dev liblayershellqtinterface-dev pkg-config
 ```
 
 ```sh
@@ -89,6 +90,17 @@ groups
 The long-term desktop path is still the fcitx5 bridge, because it can commit
 text through the active input context instead of relying on global virtual key
 events.
+
+On KDE Plasma Wayland, the shell uses LayerShellQt when available. Without it,
+KWin treats the keyboard as a normal Wayland toplevel window: client-side `x/y`
+placement can be ignored and the window may take focus.
+
+LayerShellQt is required by default. For a fallback build that intentionally
+keeps the old normal-window behavior:
+
+```sh
+cmake -S . -B build -DKDE_OSK_USE_LAYER_SHELL=OFF
+```
 
 Install:
 

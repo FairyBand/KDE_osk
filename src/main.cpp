@@ -1,5 +1,6 @@
 #include "HardwareKeyboardMonitor.h"
 #include "KeyboardController.h"
+#include "ShellWindowAdapter.h"
 #include "UInputKeyboard.h"
 
 #include <QCommandLineParser>
@@ -11,6 +12,8 @@
 
 int main(int argc, char *argv[])
 {
+    ShellWindowAdapter::prepareEnvironment();
+
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("kde-osk-shell"));
     app.setApplicationDisplayName(QStringLiteral("KDE OSK"));
@@ -33,6 +36,7 @@ int main(int argc, char *argv[])
 
     HardwareKeyboardMonitor hardwareKeyboardMonitor;
     UInputKeyboard inputKeyboard;
+    ShellWindowAdapter shellWindowAdapter;
     KeyboardController controller(&hardwareKeyboardMonitor, &inputKeyboard);
     if (parser.isSet(forceShowOption)) {
         controller.setIgnoreHardwareKeyboard(true);
@@ -44,6 +48,7 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("keyboardController"), &controller);
     engine.rootContext()->setContextProperty(QStringLiteral("hardwareKeyboardMonitor"), &hardwareKeyboardMonitor);
+    engine.rootContext()->setContextProperty(QStringLiteral("shellWindowAdapter"), &shellWindowAdapter);
 
     QObject::connect(
         &engine,

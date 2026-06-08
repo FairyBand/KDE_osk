@@ -34,6 +34,10 @@ During early development, the shell can send basic key events through Linux
 `uinput`. This makes the keyboard immediately useful for typing tests, but it
 is not a replacement for the planned fcitx5 text-commit bridge.
 
+On Plasma Wayland the shell uses LayerShellQt when available. Layer-shell
+placement is required because regular Wayland toplevel clients cannot position
+themselves globally and may take focus when touched.
+
 ### Hardware Keyboard Detection
 
 The first implementation uses libudev and treats USB, Bluetooth, and dock-like

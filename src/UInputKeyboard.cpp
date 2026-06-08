@@ -144,6 +144,10 @@ QHash<QString, UInputKeyboard::KeyStroke> createKeyMap()
     map.insert(QStringLiteral("Menu"), {KEY_COMPOSE, false});
     map.insert(QStringLiteral("PrintScreen"), {KEY_SYSRQ, false});
     map.insert(QStringLiteral("Pause"), {KEY_PAUSE, false});
+    map.insert(QStringLiteral("Shift"), {KEY_LEFTSHIFT, false});
+    map.insert(QStringLiteral("Ctrl"), {KEY_LEFTCTRL, false});
+    map.insert(QStringLiteral("Alt"), {KEY_LEFTALT, false});
+    map.insert(QStringLiteral("Meta"), {KEY_LEFTMETA, false});
 
     for (int i = 1; i <= 12; ++i) {
         map.insert(QStringLiteral("F%1").arg(i), {KEY_F1 + i - 1, false});
@@ -369,22 +373,26 @@ bool UInputKeyboard::emitEvent(unsigned short type, unsigned short code, int val
 bool UInputKeyboard::sendCombo(const QVector<int> &modifiers, int code)
 {
     for (int modifier : modifiers) {
-        if (!emitEvent(EV_KEY, modifier, 1)) {
+        if (!emitEvent(EV_KEY, modifier, 1) || !emitEvent(EV_SYN, SYN_REPORT, 0)) {
             return false;
         }
     }
 
-    if (!emitEvent(EV_KEY, code, 1) || !emitEvent(EV_KEY, code, 0)) {
+    if (!emitEvent(EV_KEY, code, 1) || !emitEvent(EV_SYN, SYN_REPORT, 0)) {
+        return false;
+    }
+
+    if (!emitEvent(EV_KEY, code, 0) || !emitEvent(EV_SYN, SYN_REPORT, 0)) {
         return false;
     }
 
     for (auto it = modifiers.crbegin(); it != modifiers.crend(); ++it) {
-        if (!emitEvent(EV_KEY, *it, 0)) {
+        if (!emitEvent(EV_KEY, *it, 0) || !emitEvent(EV_SYN, SYN_REPORT, 0)) {
             return false;
         }
     }
 
-    return emitEvent(EV_SYN, SYN_REPORT, 0);
+    return true;
 }
 
 void UInputKeyboard::setAvailable(bool available)

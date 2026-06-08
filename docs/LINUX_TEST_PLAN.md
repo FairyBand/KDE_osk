@@ -9,6 +9,17 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build
 ```
 
+Confirm CMake did not print:
+
+```text
+LayerShellQt was not found
+```
+
+If that warning appears, install the LayerShellQt development package and
+reconfigure from a clean build directory. Without LayerShellQt, Plasma Wayland
+will treat the keyboard as a normal window and may ignore its requested
+top/bottom/floating placement.
+
 ## Shell Smoke Test
 
 ```sh
@@ -21,6 +32,7 @@ Expected:
 - It does not steal focus from the active application.
 - The `Input` and `Full` layout buttons switch layouts.
 - The `Bottom`, `Top`, and `Float` window modes move the keyboard.
+- In `Float` mode, dragging the small handle in the toolbar moves the keyboard.
 - Pressing `Hide` hides the window.
 
 ## Basic Typing Test
@@ -37,6 +49,8 @@ Expected:
   text field.
 - Full keyboard modifier keys such as `Ctrl`, `Alt`, `Meta`, and `Shift` affect
   the next key press.
+- Tapping `Meta` opens the Plasma launcher if the desktop has the default Meta
+  shortcut enabled.
 
 If keys do not type, check `/dev/uinput`:
 
@@ -45,6 +59,10 @@ ls -l /dev/uinput
 ```
 
 The process must have permission to open that device.
+
+If `/dev/uinput` opens successfully but input still goes nowhere, confirm the
+build found LayerShellQt. Without LayerShellQt, the keyboard may become the
+focused Wayland toplevel and virtual key events can target the keyboard itself.
 
 For development, the included `data/70-kde-osk-uinput.rules` can be installed
 or adapted to grant a trusted local group access.

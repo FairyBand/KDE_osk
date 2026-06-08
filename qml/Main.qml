@@ -8,23 +8,47 @@ ApplicationWindow {
 
     property string windowMode: "dockBottom"
     property int floatingWidth: Math.min(Screen.width - 48, 980)
+    property int floatX: Math.round((Screen.width - floatingWidth) / 2)
+    property int floatY: Math.round((Screen.height - height) / 2)
 
     width: windowMode === "float" ? floatingWidth : Screen.width
     height: keyboard.implicitHeight
     visible: keyboardController.visible
-    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
+    flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
     color: "transparent"
     title: qsTr("KDE OSK")
 
-    x: windowMode === "float" ? Math.round((Screen.width - width) / 2) : 0
+    x: windowMode === "float" ? floatX : 0
     y: {
         if (windowMode === "dockTop") {
             return 0
         }
         if (windowMode === "float") {
-            return Math.round(Screen.height * 0.55)
+            return floatY
         }
         return Screen.height - height
+    }
+
+    function clampFloatPosition() {
+        floatX = Math.max(0, Math.min(floatX, Screen.width - width))
+        floatY = Math.max(0, Math.min(floatY, Screen.height - height))
+    }
+
+    function configureShellWindow() {
+        shellWindowAdapter.configure(root, windowMode, floatX, floatY, width, height)
+    }
+
+    Component.onCompleted: configureShellWindow()
+    onWindowModeChanged: configureShellWindow()
+    onFloatXChanged: configureShellWindow()
+    onFloatYChanged: configureShellWindow()
+    onWidthChanged: {
+        clampFloatPosition()
+        configureShellWindow()
+    }
+    onHeightChanged: {
+        clampFloatPosition()
+        configureShellWindow()
     }
 
     KeyboardView {
@@ -39,7 +63,17 @@ ApplicationWindow {
 
         onAutoShowToggled: enabled => keyboardController.autoShowEnabled = enabled
         onIgnoreHardwareKeyboardToggled: ignore => keyboardController.ignoreHardwareKeyboard = ignore
-        onWindowModeRequested: mode => root.windowMode = mode
+        onWindowModeRequested: mode => {
+            root.windowMode = mode
+            root.clampFloatPosition()
+            root.configureShellWindow()
+        }
+        onFloatingMoveRequested: (dx, dy) => {
+            root.windowMode = "float"
+            root.floatX += dx
+            root.floatY += dy
+            root.clampFloatPosition()
+        }
         onHideRequested: keyboardController.hideKeyboard()
         onKeyPressed: (keyId, shift, ctrl, alt, meta) =>
             keyboardController.keyPressed(keyId, shift, ctrl, alt, meta)

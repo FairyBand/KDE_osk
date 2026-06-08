@@ -16,6 +16,11 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 DBus)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUDEV REQUIRED IMPORTED_TARGET libudev)
 
+option(KDE_OSK_USE_LAYER_SHELL "Use LayerShellQt for Wayland keyboard window placement" ON)
+if(KDE_OSK_USE_LAYER_SHELL)
+    find_package(LayerShellQt REQUIRED)
+endif()
+
 qt_standard_project_setup(REQUIRES 6.5)
 
 configure_file(
@@ -38,6 +43,8 @@ qt_add_executable(kde-osk-shell
     src/HardwareKeyboardMonitor.h
     src/UInputKeyboard.cpp
     src/UInputKeyboard.h
+    src/ShellWindowAdapter.cpp
+    src/ShellWindowAdapter.h
 )
 
 qt_add_qml_module(kde-osk-shell
@@ -59,6 +66,15 @@ target_link_libraries(kde-osk-shell
         Qt6::DBus
         PkgConfig::LIBUDEV
 )
+
+if(KDE_OSK_USE_LAYER_SHELL AND TARGET LayerShellQt::Interface)
+    target_compile_definitions(kde-osk-shell PRIVATE HAVE_LAYER_SHELL_QT)
+    target_link_libraries(kde-osk-shell PRIVATE LayerShellQt::Interface)
+elseif(KDE_OSK_USE_LAYER_SHELL)
+    message(FATAL_ERROR "LayerShellQt was found, but target LayerShellQt::Interface is missing.")
+else()
+    message(WARNING "LayerShellQt was not found. KDE OSK will build, but Wayland positioning and non-focus behavior will be limited.")
+endif()
 
 install(TARGETS kde-osk-shell
     BUNDLE DESTINATION .

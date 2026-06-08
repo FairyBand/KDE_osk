@@ -27,6 +27,7 @@ Rectangle {
     signal autoShowToggled(bool enabled)
     signal ignoreHardwareKeyboardToggled(bool ignore)
     signal windowModeRequested(string mode)
+    signal floatingMoveRequested(real dx, real dy)
     signal hideRequested()
     signal keyPressed(string keyId, bool shift, bool ctrl, bool alt, bool meta)
 
@@ -102,7 +103,7 @@ Rectangle {
             return true
         }
         if (keyId === "Meta") {
-            root.meta = !root.meta
+            root.keyPressed("Meta", false, false, false, false)
             return true
         }
         return false
@@ -145,6 +146,47 @@ Rectangle {
 
             ButtonGroup {
                 id: keyboardModeGroup
+            }
+
+            Item {
+                Layout.preferredWidth: 38
+                Layout.fillHeight: true
+                visible: root.windowMode === "float"
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 26
+                    height: 18
+                    radius: 4
+                    color: dragHandle.pressed ? "#9ccaff" : "#3a3f46"
+                    border.color: "#6b7280"
+                }
+
+                MouseArea {
+                    id: dragHandle
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    cursorShape: Qt.SizeAllCursor
+                }
+
+                DragHandler {
+                    id: floatDragHandler
+                    target: null
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchScreen | PointerDevice.Stylus
+                    property real previousX: 0
+                    property real previousY: 0
+
+                    onActiveChanged: {
+                        previousX = 0
+                        previousY = 0
+                    }
+                    onActiveTranslationChanged: {
+                        root.floatingMoveRequested(activeTranslation.x - previousX,
+                                                   activeTranslation.y - previousY)
+                        previousX = activeTranslation.x
+                        previousY = activeTranslation.y
+                    }
+                }
             }
 
             RowLayout {
