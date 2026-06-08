@@ -7,22 +7,45 @@ Button {
     checkable: false
     property string keyId: text
     property bool repeatable: true
+    property bool triggerOnPress: true
+    property bool longPressable: false
+    property int longPressDelay: 200
     property int repeatDelay: 420
     property int repeatInterval: 34
     signal keyTriggered(string keyId)
+    signal longPressTriggered(string keyId)
+    signal pressEnded(string keyId)
 
     font.pixelSize: 20
     font.weight: Font.Medium
 
     onPressedChanged: {
         if (pressed) {
-            keyTriggered(keyId)
-            if (repeatable) {
+            if (longPressable) {
+                longPressTimer.restart()
+            }
+            if (triggerOnPress) {
+                keyTriggered(keyId)
+            }
+            if (triggerOnPress && repeatable) {
                 repeatDelayTimer.restart()
             }
         } else {
+            longPressTimer.stop()
             repeatDelayTimer.stop()
             repeatTimer.stop()
+            pressEnded(keyId)
+        }
+    }
+
+    Timer {
+        id: longPressTimer
+        interval: root.longPressDelay
+        repeat: false
+        onTriggered: {
+            if (root.pressed && root.longPressable) {
+                root.longPressTriggered(root.keyId)
+            }
         }
     }
 

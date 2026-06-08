@@ -59,6 +59,9 @@ Expected:
 - Full keyboard modifier keys such as `Ctrl`, `Alt`, `Meta`, and `Shift` affect
   the next normal key press as one atomic key combination and are then released
   automatically.
+- Holding `Ctrl`, `Alt`, `Meta`, or `Shift` for about 200 ms presses the real
+  modifier key until the touch is released, matching normal hardware-keyboard
+  hold behavior.
 - Toggling CapsLock on a physical keyboard updates the CapsLock key's checked
   state in the full keyboard layout.
 - Tapping `Meta` opens the Plasma launcher if the desktop has the default Meta

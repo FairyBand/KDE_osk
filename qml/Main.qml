@@ -206,5 +206,7 @@ ApplicationWindow {
         onHideRequested: keyboardController.hideKeyboard()
         onKeyPressed: (keyId, shift, ctrl, alt, meta) =>
             keyboardController.keyPressed(keyId, shift, ctrl, alt, meta)
+        onModifierHoldChanged: (keyId, active) =>
+            keyboardController.setModifierActive(keyId, active)
     }
 }

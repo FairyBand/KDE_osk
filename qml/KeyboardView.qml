@@ -15,6 +15,11 @@ Rectangle {
     property bool ctrl: false
     property bool alt: false
     property bool meta: false
+    property bool shiftHeld: false
+    property bool ctrlHeld: false
+    property bool altHeld: false
+    property bool metaHeld: false
+    property int modifierHoldThreshold: 200
     property bool autoShowEnabled: true
     property bool hardwareKeyboardPresent: false
     property bool ignoreHardwareKeyboard: false
@@ -35,6 +40,7 @@ Rectangle {
     signal floatingDragFinished()
     signal hideRequested()
     signal keyPressed(string keyId, bool shift, bool ctrl, bool alt, bool meta)
+    signal modifierHoldChanged(string keyId, bool active)
 
     readonly property var typingLetterRows: [
         ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
@@ -86,9 +92,9 @@ Rectangle {
             return qsTr("Bksp")
         }
         if (keyId.length === 1 && keyId >= "a" && keyId <= "z") {
-            return root.shift !== root.capsLockActive ? keyId.toUpperCase() : keyId
+            return root.effectiveShift() !== root.capsLockActive ? keyId.toUpperCase() : keyId
         }
-        if (root.shift && root.shiftedLabels[keyId] !== undefined) {
+        if (root.effectiveShift() && root.shiftedLabels[keyId] !== undefined) {
             return root.shiftedLabels[keyId]
         }
         return keyId
@@ -117,40 +123,150 @@ Rectangle {
         return 1
     }
 
-    function toggleModifier(keyId) {
+    function isModifier(keyId) {
+        return ["Shift", "Ctrl", "Alt", "Meta"].indexOf(keyId) !== -1
+    }
+
+    function effectiveShift() {
+        return root.shift || root.shiftHeld
+    }
+
+    function effectiveCtrl() {
+        return root.ctrl || root.ctrlHeld
+    }
+
+    function effectiveAlt() {
+        return root.alt || root.altHeld
+    }
+
+    function effectiveMeta() {
+        return root.meta || root.metaHeld
+    }
+
+    function modifierActive(keyId) {
         if (keyId === "Shift") {
-            root.shift = !root.shift
-            return true
+            return root.effectiveShift()
         }
         if (keyId === "Ctrl") {
-            root.ctrl = !root.ctrl
-            return true
+            return root.effectiveCtrl()
         }
         if (keyId === "Alt") {
-            root.alt = !root.alt
-            return true
+            return root.effectiveAlt()
         }
         if (keyId === "Meta") {
-            if (root.meta) {
-                root.keyPressed("Meta", false, false, false, false)
-                root.meta = false
-                return true
-            }
-            root.meta = !root.meta
-            return true
+            return root.effectiveMeta()
         }
         return false
     }
 
-    function sendKey(keyId) {
-        if (toggleModifier(keyId)) {
-            return
+    function modifierStickyActive(keyId) {
+        if (keyId === "Shift") {
+            return root.shift
         }
-        root.keyPressed(outputKeyFor(keyId), root.shift, root.ctrl, root.alt, root.meta)
-        releaseActiveModifiers()
+        if (keyId === "Ctrl") {
+            return root.ctrl
+        }
+        if (keyId === "Alt") {
+            return root.alt
+        }
+        if (keyId === "Meta") {
+            return root.meta
+        }
+        return false
     }
 
-    function releaseActiveModifiers() {
+    function modifierHeldActive(keyId) {
+        if (keyId === "Shift") {
+            return root.shiftHeld
+        }
+        if (keyId === "Ctrl") {
+            return root.ctrlHeld
+        }
+        if (keyId === "Alt") {
+            return root.altHeld
+        }
+        if (keyId === "Meta") {
+            return root.metaHeld
+        }
+        return false
+    }
+
+    function setModifierSticky(keyId, active) {
+        if (keyId === "Shift") {
+            root.shift = active
+            return
+        }
+        if (keyId === "Ctrl") {
+            root.ctrl = active
+            return
+        }
+        if (keyId === "Alt") {
+            root.alt = active
+            return
+        }
+        if (keyId === "Meta") {
+            root.meta = active
+        }
+    }
+
+    function setModifierHeld(keyId, active) {
+        if (keyId === "Shift") {
+            root.shiftHeld = active
+            return
+        }
+        if (keyId === "Ctrl") {
+            root.ctrlHeld = active
+            return
+        }
+        if (keyId === "Alt") {
+            root.altHeld = active
+            return
+        }
+        if (keyId === "Meta") {
+            root.metaHeld = active
+        }
+    }
+
+    function modifierLabel(keyId) {
+        if (keyId === "Shift" && root.modifierActive(keyId)) {
+            return qsTr("SHIFT")
+        }
+        return keyId
+    }
+
+    function beginModifierHold(keyId) {
+        if (!root.isModifier(keyId) || root.modifierHeldActive(keyId)) {
+            return
+        }
+        if (root.modifierStickyActive(keyId)) {
+            root.setModifierSticky(keyId, false)
+        }
+        root.setModifierHeld(keyId, true)
+        root.modifierHoldChanged(keyId, true)
+    }
+
+    function finishModifierPress(keyId) {
+        if (!root.isModifier(keyId)) {
+            return
+        }
+        if (root.modifierHeldActive(keyId)) {
+            root.setModifierHeld(keyId, false)
+            root.modifierHoldChanged(keyId, false)
+            return
+        }
+        root.setModifierSticky(keyId, !root.modifierStickyActive(keyId))
+    }
+
+    function sendKey(keyId) {
+        root.keyPressed(outputKeyFor(keyId),
+                        root.effectiveShift(),
+                        root.effectiveCtrl(),
+                        root.effectiveAlt(),
+                        root.effectiveMeta())
+        releaseStickyModifiers()
+    }
+
+    function releaseStickyModifiers() {
         if (root.shift) {
             root.shift = false
         }
@@ -329,9 +445,13 @@ Rectangle {
                     Layout.fillHeight: true
                     keyId: "Shift"
                     repeatable: false
-                    text: root.shift ? qsTr("SHIFT") : qsTr("Shift")
-                    checked: root.shift
-                    onKeyTriggered: root.sendKey("Shift")
+                    triggerOnPress: false
+                    longPressable: true
+                    longPressDelay: root.modifierHoldThreshold
+                    text: root.modifierLabel("Shift")
+                    checked: root.modifierActive("Shift")
+                    onLongPressTriggered: keyId => root.beginModifierHold(keyId)
+                    onPressEnded: keyId => root.finishModifierPress(keyId)
                 }
 
                 KeyButton {
@@ -396,19 +516,23 @@ Rectangle {
                         model: parent.modelData
 
                         KeyButton {
+                            readonly property bool modifierKey: root.isModifier(modelData)
+
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             Layout.preferredWidth: root.keyWeight(modelData)
                             keyId: modelData
-                            repeatable: ["Shift", "Ctrl", "Alt", "Meta"].indexOf(modelData) === -1
+                            repeatable: !modifierKey
+                            triggerOnPress: !modifierKey
+                            longPressable: modifierKey
+                            longPressDelay: root.modifierHoldThreshold
                             text: root.labelFor(modelData)
-                            checked: (modelData === "Shift" && root.shift)
-                                || (modelData === "Ctrl" && root.ctrl)
-                                || (modelData === "Alt" && root.alt)
-                                || (modelData === "Meta" && root.meta)
+                            checked: root.modifierActive(modelData)
                                 || (modelData === "CapsLock" && root.capsLockActive)
                             font.pixelSize: modelData.length > 6 ? 13 : 16
                             onKeyTriggered: keyId => root.sendKey(keyId)
+                            onLongPressTriggered: keyId => root.beginModifierHold(keyId)
+                            onPressEnded: keyId => root.finishModifierPress(keyId)
                         }
                     }
                 }
