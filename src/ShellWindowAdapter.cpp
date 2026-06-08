@@ -2,7 +2,6 @@
 
 #include <QDebug>
 #include <QMargins>
-#include <QSize>
 #include <QString>
 #include <QWindow>
 #include <QtGlobal>
@@ -85,29 +84,27 @@ void ShellWindowAdapter::configure(QObject *windowObject,
     layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
     layerWindow->setExclusiveZone(0);
 
-    const int safeWidth = qMax(1, width);
-    const int safeHeight = qMax(1, height);
+    Q_UNUSED(width)
+    Q_UNUSED(height)
 
     if (mode == QStringLiteral("dockTop")) {
-        layerWindow->setAnchors(LayerShellQt::Window::AnchorTop
+        layerWindow->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop)
                                 | LayerShellQt::Window::AnchorLeft
                                 | LayerShellQt::Window::AnchorRight);
         layerWindow->setMargins(QMargins());
-        layerWindow->setDesiredSize(QSize(safeWidth, safeHeight));
         return;
     }
 
     if (mode == QStringLiteral("float")) {
-        layerWindow->setAnchors(LayerShellQt::Window::AnchorTop | LayerShellQt::Window::AnchorLeft);
+        layerWindow->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop)
+                                | LayerShellQt::Window::AnchorLeft);
         layerWindow->setMargins(QMargins(qMax(0, floatingX), qMax(0, floatingY), 0, 0));
-        layerWindow->setDesiredSize(QSize(safeWidth, safeHeight));
         return;
     }
 
-    layerWindow->setAnchors(LayerShellQt::Window::AnchorBottom
+    layerWindow->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorBottom)
                             | LayerShellQt::Window::AnchorLeft
                             | LayerShellQt::Window::AnchorRight);
     layerWindow->setMargins(QMargins());
-    layerWindow->setDesiredSize(QSize(safeWidth, safeHeight));
 #endif
 }

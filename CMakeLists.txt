@@ -12,7 +12,7 @@ set(CMAKE_AUTOMOC ON)
 
 include(GNUInstallDirs)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 DBus)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 DBus)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUDEV REQUIRED IMPORTED_TARGET libudev)
 
@@ -21,7 +21,7 @@ if(KDE_OSK_USE_LAYER_SHELL)
     find_package(LayerShellQt REQUIRED)
 endif()
 
-qt_standard_project_setup(REQUIRES 6.5)
+qt_standard_project_setup(REQUIRES 6.4)
 
 configure_file(
     data/org.kde.KdeOsk.service.in

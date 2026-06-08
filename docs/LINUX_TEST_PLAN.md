@@ -7,6 +7,7 @@ Run these checks on a KDE Plasma Wayland machine.
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build
+./build/kde-osk-shell --help
 ```
 
 Confirm CMake did not print:
@@ -19,6 +20,10 @@ If that warning appears, install the LayerShellQt development package and
 reconfigure from a clean build directory. Without LayerShellQt, Plasma Wayland
 will treat the keyboard as a normal window and may ignore its requested
 top/bottom/floating placement.
+
+WSL can be used for compile checks, but it is not a reliable runtime test
+environment for the LayerShellQt Wayland window. Use a real Plasma Wayland
+session for `--force-show` UI testing.
 
 ## Shell Smoke Test
 

@@ -38,7 +38,7 @@ See [docs/DBUS.md](docs/DBUS.md) for the first shell control API.
 
 ## Build
 
-Linux with Qt 6, libudev, KDE LayerShellQt, and the kernel uinput device is
+Linux with Qt 6.4 or newer, libudev, KDE LayerShellQt, and the kernel uinput device is
 required for the Wayland test path.
 
 Typical dependencies:
@@ -48,7 +48,7 @@ Typical dependencies:
 sudo pacman -S cmake extra-cmake-modules qt6-base qt6-declarative qt6-quickcontrols2 qt6-wayland layer-shell-qt systemd
 
 # Debian/Ubuntu family
-sudo apt install cmake qt6-base-dev qt6-declarative-dev qml6-module-qtquick-controls qt6-wayland libudev-dev liblayershellqtinterface-dev pkg-config
+sudo apt install cmake qt6-base-dev qt6-declarative-dev qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window qml6-module-qtquick-templates qml6-module-qtquick-nativestyle qml6-module-qtqml-workerscript qt6-wayland libudev-dev liblayershellqtinterface-dev pkg-config
 ```
 
 ```sh

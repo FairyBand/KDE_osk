@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
         []() { QCoreApplication::exit(1); },
         Qt::QueuedConnection);
 
-    engine.loadFromModule(QStringLiteral("KdeOsk"), QStringLiteral("Main"));
+    engine.load(QUrl(QStringLiteral("qrc:/KdeOsk/qml/Main.qml")));
 
     if (parser.isSet(forceVisibleOption)) {
         controller.showKeyboard();
