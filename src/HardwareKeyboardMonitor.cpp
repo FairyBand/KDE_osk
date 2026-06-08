@@ -15,6 +15,12 @@ bool propertyEquals(udev_device *device, const char *name, const char *expected)
     return value != nullptr && std::strcmp(value, expected) == 0;
 }
 
+bool propertyContains(udev_device *device, const char *name, const char *needle)
+{
+    const char *value = udev_device_get_property_value(device, name);
+    return value != nullptr && std::strstr(value, needle) != nullptr;
+}
+
 bool hasParentSubsystem(udev_device *device, const char *subsystem)
 {
     udev_device *parent = udev_device_get_parent(device);
@@ -140,6 +146,7 @@ bool HardwareKeyboardMonitor::isExternalKeyboardDevice(udev *udevContext, const 
 
     const bool isKeyboard = propertyEquals(device, "ID_INPUT_KEYBOARD", "1");
     const bool isVirtual = propertyEquals(device, "ID_BUS", "virtual")
+        || propertyContains(device, "NAME", "KDE OSK virtual keyboard")
         || propertyEquals(device, "ID_INPUT_JOYSTICK", "1")
         || hasParentSubsystem(device, "virtual")
         || hasParentDriver(device, "uinput");

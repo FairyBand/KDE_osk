@@ -20,6 +20,7 @@ are already trusted by the compositor or greeter.
 The shell owns the touch UI, layout state, and D-Bus API:
 
 - `org.kde.KdeOsk /Keyboard showKeyboard()`
+- `org.kde.KdeOsk /Keyboard forceShowKeyboard()`
 - `org.kde.KdeOsk /Keyboard hideKeyboard()`
 - `org.kde.KdeOsk /Keyboard setTextFocusActive(bool active)`
 
@@ -28,6 +29,10 @@ Bluetooth, or dock-style keyboard is present, automatic showing is suppressed.
 
 The shell must not become the KDE virtual keyboard backend while fcitx5 is in
 use. It is a companion UI controlled by fcitx5 and the session integrations.
+
+During early development, the shell can send basic key events through Linux
+`uinput`. This makes the keyboard immediately useful for typing tests, but it
+is not a replacement for the planned fcitx5 text-commit bridge.
 
 ### Hardware Keyboard Detection
 
@@ -41,6 +46,19 @@ Future refinements:
 - Add a configuration allowlist/blocklist for internal laptop keyboards.
 - Detect tablet-mode switch devices where available.
 - Expose device state on D-Bus for Plasma settings UI.
+
+### Window Placement
+
+The shell supports three development window modes:
+
+- Bottom docked.
+- Top docked.
+- Floating.
+
+Automatic avoidance of the active input field requires geometry from the text
+focus integration. The first version exposes manual top/bottom/floating modes;
+the fcitx5 bridge should later provide cursor rectangle data so the shell can
+choose a non-overlapping edge automatically.
 
 ### Desktop Session Bridge
 

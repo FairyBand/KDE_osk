@@ -1,18 +1,22 @@
 #include "KeyboardController.h"
 
 #include "HardwareKeyboardMonitor.h"
+#include "UInputKeyboard.h"
 
 #include <QDBusConnection>
 #include <QDebug>
 
-KeyboardController::KeyboardController(HardwareKeyboardMonitor *hardwareKeyboardMonitor, QObject *parent)
+KeyboardController::KeyboardController(HardwareKeyboardMonitor *hardwareKeyboardMonitor, UInputKeyboard *inputKeyboard, QObject *parent)
     : QObject(parent)
     , m_hardwareKeyboardMonitor(hardwareKeyboardMonitor)
+    , m_inputKeyboard(inputKeyboard)
 {
     connect(m_hardwareKeyboardMonitor,
             &HardwareKeyboardMonitor::hardwareKeyboardPresentChanged,
             this,
             [this]() { updateVisibilityFromPolicy(); });
+    connect(m_inputKeyboard, &UInputKeyboard::availableChanged, this, &KeyboardController::inputBackendAvailableChanged);
+    connect(m_inputKeyboard, &UInputKeyboard::lastErrorChanged, this, &KeyboardController::inputBackendErrorChanged);
 }
 
 bool KeyboardController::visible() const
@@ -23,6 +27,21 @@ bool KeyboardController::visible() const
 bool KeyboardController::autoShowEnabled() const
 {
     return m_autoShowEnabled;
+}
+
+bool KeyboardController::ignoreHardwareKeyboard() const
+{
+    return m_ignoreHardwareKeyboard;
+}
+
+bool KeyboardController::inputBackendAvailable() const
+{
+    return m_inputKeyboard->available();
+}
+
+QString KeyboardController::inputBackendError() const
+{
+    return m_inputKeyboard->lastError();
 }
 
 bool KeyboardController::registerDBus()
@@ -39,9 +58,14 @@ bool KeyboardController::registerDBus()
 
 void KeyboardController::showKeyboard()
 {
-    if (m_hardwareKeyboardMonitor->hardwareKeyboardPresent()) {
+    if (shouldSuppressForHardwareKeyboard()) {
         return;
     }
+    setVisible(true);
+}
+
+void KeyboardController::forceShowKeyboard()
+{
     setVisible(true);
 }
 
@@ -71,20 +95,38 @@ void KeyboardController::setAutoShowEnabled(bool enabled)
     updateVisibilityFromPolicy();
 }
 
-void KeyboardController::keyPressed(const QString &text)
+void KeyboardController::setIgnoreHardwareKeyboard(bool ignore)
 {
-    emit commitTextRequested(text);
-    qInfo() << "Key pressed:" << text;
+    if (m_ignoreHardwareKeyboard == ignore) {
+        return;
+    }
+
+    m_ignoreHardwareKeyboard = ignore;
+    emit ignoreHardwareKeyboardChanged(m_ignoreHardwareKeyboard);
+    updateVisibilityFromPolicy();
+}
+
+void KeyboardController::keyPressed(const QString &keyId, bool shift, bool ctrl, bool alt, bool meta)
+{
+    emit commitTextRequested(keyId);
+    if (!m_inputKeyboard->sendKey(keyId, shift, ctrl, alt, meta)) {
+        qWarning() << "Failed to send key:" << keyId;
+    }
 }
 
 void KeyboardController::updateVisibilityFromPolicy()
 {
-    if (!m_autoShowEnabled || m_hardwareKeyboardMonitor->hardwareKeyboardPresent()) {
+    if (!m_autoShowEnabled || shouldSuppressForHardwareKeyboard()) {
         setVisible(false);
         return;
     }
 
     setVisible(m_textFocusActive);
+}
+
+bool KeyboardController::shouldSuppressForHardwareKeyboard() const
+{
+    return !m_ignoreHardwareKeyboard && m_hardwareKeyboardMonitor->hardwareKeyboardPresent();
 }
 
 void KeyboardController::setVisible(bool visible)

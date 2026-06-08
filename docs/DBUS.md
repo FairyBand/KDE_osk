@@ -24,6 +24,11 @@ org.kde.KdeOsk.Keyboard
 
 Shows the keyboard unless an external hardware keyboard is currently connected.
 
+`forceShowKeyboard()`
+
+Shows the keyboard immediately. This is intended for development and manual
+testing because it bypasses hardware-keyboard suppression.
+
 `hideKeyboard()`
 
 Hides the keyboard immediately.
@@ -43,6 +48,19 @@ Current shell visibility.
 
 User/session policy for automatic visibility. When this is disabled, focus
 changes do not show the keyboard.
+
+`ignoreHardwareKeyboard: bool`
+
+Development policy switch. When enabled, automatic and manual display are not
+suppressed by external hardware keyboard detection.
+
+`inputBackendAvailable: bool`
+
+Whether the shell successfully opened the current input backend.
+
+`inputBackendError: string`
+
+The most recent input-backend initialization or write error.
 
 ## Signals
 

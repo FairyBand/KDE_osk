@@ -1,0 +1,4 @@
+# Development helper for the temporary uinput backend.
+# Install only on trusted single-user development systems or adapt the group to
+# your distro policy.
+KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"

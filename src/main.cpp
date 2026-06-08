@@ -1,5 +1,6 @@
 #include "HardwareKeyboardMonitor.h"
 #include "KeyboardController.h"
+#include "UInputKeyboard.h"
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
@@ -21,13 +22,21 @@ int main(int argc, char *argv[])
 
     QCommandLineOption forceVisibleOption(
         QStringLiteral("show"),
-        QStringLiteral("Show the keyboard immediately on startup."));
+        QStringLiteral("Show the keyboard immediately on startup if policy allows it."));
     parser.addOption(forceVisibleOption);
+    QCommandLineOption forceShowOption(
+        QStringLiteral("force-show"),
+        QStringLiteral("Show the keyboard immediately and ignore hardware keyboard suppression."));
+    parser.addOption(forceShowOption);
 
     parser.process(app);
 
     HardwareKeyboardMonitor hardwareKeyboardMonitor;
-    KeyboardController controller(&hardwareKeyboardMonitor);
+    UInputKeyboard inputKeyboard;
+    KeyboardController controller(&hardwareKeyboardMonitor, &inputKeyboard);
+    if (parser.isSet(forceShowOption)) {
+        controller.setIgnoreHardwareKeyboard(true);
+    }
     if (!controller.registerDBus()) {
         qWarning("Failed to register D-Bus service. Another kde-osk-shell may already be running.");
     }
@@ -47,6 +56,9 @@ int main(int argc, char *argv[])
 
     if (parser.isSet(forceVisibleOption)) {
         controller.showKeyboard();
+    }
+    if (parser.isSet(forceShowOption)) {
+        controller.forceShowKeyboard();
     }
 
     return app.exec();

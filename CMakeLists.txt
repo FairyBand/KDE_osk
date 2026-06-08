@@ -36,6 +36,8 @@ qt_add_executable(kde-osk-shell
     src/KeyboardController.h
     src/HardwareKeyboardMonitor.cpp
     src/HardwareKeyboardMonitor.h
+    src/UInputKeyboard.cpp
+    src/UInputKeyboard.h
 )
 
 qt_add_qml_module(kde-osk-shell
@@ -77,6 +79,10 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kde-osk-shell.service
 
 install(FILES data/org.kde.KdeOsk.Keyboard.xml
     DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/interfaces
+)
+
+install(FILES data/70-kde-osk-uinput.rules
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/udev/rules.d
 )
 
 install(DIRECTORY qml/

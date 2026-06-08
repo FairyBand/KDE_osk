@@ -10,10 +10,17 @@ future settings.
 Initial done criteria:
 
 - `kde-osk-shell --show` displays the keyboard.
+- `kde-osk-shell --force-show` displays the keyboard while bypassing hardware
+  keyboard suppression for development.
 - D-Bus can call `showKeyboard`, `hideKeyboard`, and `setTextFocusActive`.
 - External hardware keyboard presence hides the shell and blocks auto-show.
 - A systemd user service can keep the shell available on the session bus.
 - The keyboard QML can be reused by lock-screen and greeter integrations.
+- Basic key input works through the temporary Linux `uinput` backend.
+
+The `uinput` backend is a practical development bridge, not the final desktop
+architecture. The fcitx5 bridge remains the preferred path for correct text
+commit and focus handling.
 
 Linux verification steps are tracked in [LINUX_TEST_PLAN.md](LINUX_TEST_PLAN.md).
 

@@ -3,12 +3,16 @@
 <node name="/Keyboard">
   <interface name="org.kde.KdeOsk.Keyboard">
     <method name="showKeyboard"/>
+    <method name="forceShowKeyboard"/>
     <method name="hideKeyboard"/>
     <method name="setTextFocusActive">
       <arg name="active" type="b" direction="in"/>
     </method>
     <property name="visible" type="b" access="read"/>
     <property name="autoShowEnabled" type="b" access="readwrite"/>
+    <property name="ignoreHardwareKeyboard" type="b" access="readwrite"/>
+    <property name="inputBackendAvailable" type="b" access="read"/>
+    <property name="inputBackendError" type="s" access="read"/>
     <signal name="visibleChanged">
       <arg name="visible" type="b"/>
     </signal>
