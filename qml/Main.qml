@@ -11,11 +11,8 @@ ApplicationWindow {
     property int floatX: Math.round((Screen.width - floatingWidth) / 2)
     property int floatY: Math.round((Screen.height - height) / 2)
     property bool batchingFloatMove: false
-    property bool draggingFloatWindow: false
     property int dragStartFloatX: 0
     property int dragStartFloatY: 0
-    property int queuedFloatX: 0
-    property int queuedFloatY: 0
 
     width: windowMode === "float" ? floatingWidth : Screen.width
     height: keyboard.implicitHeight
@@ -45,19 +42,7 @@ ApplicationWindow {
         floatX = Math.max(0, Math.min(Math.round(nextX), Screen.width - width))
         floatY = Math.max(0, Math.min(Math.round(nextY), Screen.height - height))
         batchingFloatMove = false
-        if (draggingFloatWindow) {
-            shellWindowAdapter.moveFloating(root, floatX, floatY)
-        } else {
-            configureShellWindow()
-        }
-    }
-
-    function queueFloatingPosition(nextX, nextY) {
-        queuedFloatX = Math.max(0, Math.min(Math.round(nextX), Screen.width - width))
-        queuedFloatY = Math.max(0, Math.min(Math.round(nextY), Screen.height - height))
-        if (!dragFrameTimer.running) {
-            dragFrameTimer.start()
-        }
+        configureShellWindow()
     }
 
     function configureShellWindow() {
@@ -85,13 +70,6 @@ ApplicationWindow {
         configureShellWindow()
     }
 
-    Timer {
-        id: dragFrameTimer
-        interval: 16
-        repeat: false
-        onTriggered: root.setFloatingPosition(root.queuedFloatX, root.queuedFloatY)
-    }
-
     KeyboardView {
         id: keyboard
         anchors.fill: parent
@@ -113,23 +91,14 @@ ApplicationWindow {
             if (root.windowMode !== "float") {
                 root.windowMode = "float"
             }
-            root.draggingFloatWindow = true
             root.dragStartFloatX = root.floatX
             root.dragStartFloatY = root.floatY
-            root.queuedFloatX = root.floatX
-            root.queuedFloatY = root.floatY
         }
         onFloatingDragMoved: (dx, dy) => {
-            root.queueFloatingPosition(root.dragStartFloatX + dx, root.dragStartFloatY + dy)
+            root.setFloatingPosition(root.dragStartFloatX + dx, root.dragStartFloatY + dy)
         }
         onFloatingDragFinished: {
-            root.draggingFloatWindow = false
-            if (dragFrameTimer.running) {
-                dragFrameTimer.stop()
-                root.setFloatingPosition(root.queuedFloatX, root.queuedFloatY)
-            } else {
-                root.configureShellWindow()
-            }
+            root.configureShellWindow()
         }
         onHideRequested: keyboardController.hideKeyboard()
         onKeyPressed: (keyId, shift, ctrl, alt, meta) =>
