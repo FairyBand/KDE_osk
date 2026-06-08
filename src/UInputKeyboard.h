@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QObject>
-#include <QSet>
 #include <QString>
 #include <QTimer>
 #include <QVector>
@@ -27,7 +26,6 @@ public:
     bool capsLockActive() const;
 
     bool sendKey(const QString &keyId, bool shift, bool ctrl, bool alt, bool meta);
-    bool setModifierActive(const QString &keyId, bool active);
 
 signals:
     void availableChanged(bool available);
@@ -54,6 +52,5 @@ private:
     bool m_available = false;
     bool m_capsLockActive = false;
     QString m_lastError;
-    QSet<int> m_activeModifiers;
     QTimer m_capsLockPollTimer;
 };

@@ -167,13 +167,6 @@ void KeyboardController::keyPressed(const QString &keyId, bool shift, bool ctrl,
     }
 }
 
-void KeyboardController::setModifierActive(const QString &keyId, bool active)
-{
-    if (!m_inputKeyboard->setModifierActive(keyId, active)) {
-        qWarning() << "Failed to set modifier:" << keyId << active;
-    }
-}
-
 void KeyboardController::updateVisibilityFromPolicy()
 {
     if (!m_autoShowEnabled || shouldSuppressForHardwareKeyboard()) {

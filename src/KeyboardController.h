@@ -49,7 +49,6 @@ public slots:
     void setAutoShowEnabled(bool enabled);
     void setIgnoreHardwareKeyboard(bool ignore);
     void keyPressed(const QString &keyId, bool shift = false, bool ctrl = false, bool alt = false, bool meta = false);
-    void setModifierActive(const QString &keyId, bool active);
 
 signals:
     void visibleChanged(bool visible);

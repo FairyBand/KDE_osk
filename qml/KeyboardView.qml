@@ -35,7 +35,6 @@ Rectangle {
     signal floatingDragFinished()
     signal hideRequested()
     signal keyPressed(string keyId, bool shift, bool ctrl, bool alt, bool meta)
-    signal modifierChanged(string keyId, bool active)
 
     readonly property var typingLetterRows: [
         ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
@@ -55,6 +54,29 @@ Rectangle {
         ["Shift", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "Shift"],
         ["Ctrl", "Meta", "Alt", "Space", "Alt", "Menu", "Left", "Down", "Up", "Right"]
     ]
+    readonly property var shiftedLabels: ({
+        "`": "~",
+        "1": "!",
+        "2": "@",
+        "3": "#",
+        "4": "$",
+        "5": "%",
+        "6": "^",
+        "7": "&",
+        "8": "*",
+        "9": "(",
+        "0": ")",
+        "-": "_",
+        "=": "+",
+        "[": "{",
+        "]": "}",
+        "\\": "|",
+        ";": ":",
+        "'": "\"",
+        ",": "<",
+        ".": ">",
+        "/": "?"
+    })
 
     function labelFor(keyId) {
         if (keyId === "Space") {
@@ -65,6 +87,9 @@ Rectangle {
         }
         if (keyId.length === 1 && keyId >= "a" && keyId <= "z") {
             return root.shift !== root.capsLockActive ? keyId.toUpperCase() : keyId
+        }
+        if (root.shift && root.shiftedLabels[keyId] !== undefined) {
+            return root.shiftedLabels[keyId]
         }
         return keyId
     }
@@ -95,22 +120,23 @@ Rectangle {
     function toggleModifier(keyId) {
         if (keyId === "Shift") {
             root.shift = !root.shift
-            root.modifierChanged("Shift", root.shift)
             return true
         }
         if (keyId === "Ctrl") {
             root.ctrl = !root.ctrl
-            root.modifierChanged("Ctrl", root.ctrl)
             return true
         }
         if (keyId === "Alt") {
             root.alt = !root.alt
-            root.modifierChanged("Alt", root.alt)
             return true
         }
         if (keyId === "Meta") {
+            if (root.meta) {
+                root.keyPressed("Meta", false, false, false, false)
+                root.meta = false
+                return true
+            }
             root.meta = !root.meta
-            root.modifierChanged("Meta", root.meta)
             return true
         }
         return false
@@ -127,19 +153,15 @@ Rectangle {
     function releaseActiveModifiers() {
         if (root.shift) {
             root.shift = false
-            root.modifierChanged("Shift", false)
         }
         if (root.ctrl) {
             root.ctrl = false
-            root.modifierChanged("Ctrl", false)
         }
         if (root.alt) {
             root.alt = false
-            root.modifierChanged("Alt", false)
         }
         if (root.meta) {
             root.meta = false
-            root.modifierChanged("Meta", false)
         }
     }
 

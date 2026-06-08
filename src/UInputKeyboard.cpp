@@ -8,7 +8,6 @@
 #include <QHash>
 #include <QList>
 #include <QPair>
-#include <QSet>
 
 #include <cerrno>
 #include <cstring>
@@ -18,7 +17,6 @@
 #include <linux/uinput.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include <utility>
 
 namespace
 {
@@ -247,36 +245,6 @@ bool UInputKeyboard::sendKey(const QString &keyId, bool shift, bool ctrl, bool a
     return sent;
 }
 
-bool UInputKeyboard::setModifierActive(const QString &keyId, bool active)
-{
-    if (!m_available) {
-        qWarning() << "Cannot set modifier; uinput backend is unavailable:" << m_lastError;
-        return false;
-    }
-
-    KeyStroke stroke;
-    if (!lookupKey(keyId, &stroke)) {
-        qWarning() << "Unsupported modifier:" << keyId;
-        return false;
-    }
-
-    const bool alreadyActive = m_activeModifiers.contains(stroke.code);
-    if (alreadyActive == active) {
-        return true;
-    }
-
-    if (!emitEvent(EV_KEY, stroke.code, active ? 1 : 0) || !sync()) {
-        return false;
-    }
-
-    if (active) {
-        m_activeModifiers.insert(stroke.code);
-    } else {
-        m_activeModifiers.remove(stroke.code);
-    }
-    return true;
-}
-
 bool UInputKeyboard::initialize()
 {
     m_fd = ::open(DevicePath, O_RDWR | O_NONBLOCK);
@@ -424,14 +392,6 @@ void UInputKeyboard::closeDevice()
         return;
     }
 
-    for (int modifier : std::as_const(m_activeModifiers)) {
-        emitEvent(EV_KEY, modifier, 0);
-    }
-    if (!m_activeModifiers.isEmpty()) {
-        sync();
-        m_activeModifiers.clear();
-    }
-
     if (m_available) {
         ::ioctl(m_fd, UI_DEV_DESTROY);
     }
@@ -496,10 +456,8 @@ bool UInputKeyboard::sendCombo(const QVector<int> &modifiers, int code)
     };
 
     for (int modifier : modifiers) {
-        if (m_activeModifiers.contains(modifier)) {
-            continue;
-        }
         if (!emitEvent(EV_KEY, modifier, 1) || !sync()) {
+            releaseTemporaryModifiers();
             return false;
         }
         temporaryModifiers.append(modifier);

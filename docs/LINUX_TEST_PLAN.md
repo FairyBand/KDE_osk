@@ -54,8 +54,11 @@ Expected:
   text field.
 - Holding a repeatable key starts repeating after a short delay.
 - Tapping `Shift` once and then a letter produces the shifted letter.
+- Tapping `Shift` updates digit and punctuation labels to the characters that
+  will be produced with Shift active.
 - Full keyboard modifier keys such as `Ctrl`, `Alt`, `Meta`, and `Shift` affect
-  the next normal key press and are then released automatically.
+  the next normal key press as one atomic key combination and are then released
+  automatically.
 - Toggling CapsLock on a physical keyboard updates the CapsLock key's checked
   state in the full keyboard layout.
 - Tapping `Meta` opens the Plasma launcher if the desktop has the default Meta
