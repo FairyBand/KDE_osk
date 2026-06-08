@@ -10,19 +10,24 @@ ApplicationWindow {
     property int floatingWidth: Math.min(Screen.width - 48, 980)
     property int floatX: Math.round((Screen.width - floatingWidth) / 2)
     property int floatY: Math.round((Screen.height - height) / 2)
+    property bool floatDragActive: false
     property bool batchingFloatMove: false
-    property int dragStartFloatX: 0
-    property int dragStartFloatY: 0
 
-    width: windowMode === "float" ? floatingWidth : Screen.width
-    height: keyboard.implicitHeight
+    readonly property bool layerShellActive: shellWindowAdapter.available
+    readonly property bool floatDragOverlayActive: layerShellActive && windowMode === "float" && floatDragActive
+
+    width: floatDragOverlayActive ? Screen.width : windowMode === "float" ? floatingWidth : Screen.width
+    height: floatDragOverlayActive ? Screen.height : keyboard.implicitHeight
     visible: keyboardController.visible
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
     color: "transparent"
     title: qsTr("KDE OSK")
 
-    x: windowMode === "float" ? floatX : 0
+    x: layerShellActive ? 0 : windowMode === "float" ? floatX : 0
     y: {
+        if (layerShellActive) {
+            return 0
+        }
         if (windowMode === "dockTop") {
             return 0
         }
@@ -32,21 +37,58 @@ ApplicationWindow {
         return Screen.height - height
     }
 
+    function floatingContentHeight() {
+        return keyboard.implicitHeight
+    }
+
+    function maxFloatX() {
+        return Math.max(0, Screen.width - floatingWidth)
+    }
+
+    function maxFloatY() {
+        return Math.max(0, Screen.height - floatingContentHeight())
+    }
+
     function clampFloatPosition() {
-        floatX = Math.max(0, Math.min(floatX, Screen.width - width))
-        floatY = Math.max(0, Math.min(floatY, Screen.height - height))
+        floatX = Math.max(0, Math.min(floatX, maxFloatX()))
+        floatY = Math.max(0, Math.min(floatY, maxFloatY()))
     }
 
     function setFloatingPosition(nextX, nextY) {
         batchingFloatMove = true
-        floatX = Math.max(0, Math.min(Math.round(nextX), Screen.width - width))
-        floatY = Math.max(0, Math.min(Math.round(nextY), Screen.height - height))
+        floatX = Math.max(0, Math.min(Math.round(nextX), maxFloatX()))
+        floatY = Math.max(0, Math.min(Math.round(nextY), maxFloatY()))
         batchingFloatMove = false
+        if (!floatDragActive) {
+            configureShellWindow()
+        }
+    }
+
+    function beginFloatingDrag() {
+        if (windowMode !== "float") {
+            windowMode = "float"
+        }
+        clampFloatPosition()
+        floatDragActive = true
+        configureShellWindow()
+    }
+
+    function moveFloatingBy(dx, dy) {
+        if (windowMode !== "float") {
+            return
+        }
+        setFloatingPosition(floatX + dx, floatY + dy)
+    }
+
+    function finishFloatingDrag() {
+        floatDragActive = false
+        clampFloatPosition()
         configureShellWindow()
     }
 
     function configureShellWindow() {
-        shellWindowAdapter.configure(root, windowMode, floatX, floatY, width, height)
+        const shellMode = floatDragOverlayActive ? "floatOverlay" : windowMode
+        shellWindowAdapter.configure(root, shellMode, floatX, floatY, width, height)
     }
 
     Component.onCompleted: configureShellWindow()
@@ -72,7 +114,10 @@ ApplicationWindow {
 
     KeyboardView {
         id: keyboard
-        anchors.fill: parent
+        width: root.windowMode === "float" ? root.floatingWidth : root.width
+        height: implicitHeight
+        x: root.floatDragOverlayActive ? root.floatX : 0
+        y: root.floatDragOverlayActive ? root.floatY : 0
         autoShowEnabled: keyboardController.autoShowEnabled
         hardwareKeyboardPresent: hardwareKeyboardMonitor.hardwareKeyboardPresent
         ignoreHardwareKeyboard: keyboardController.ignoreHardwareKeyboard
@@ -87,19 +132,11 @@ ApplicationWindow {
             root.clampFloatPosition()
             root.configureShellWindow()
         }
-        onFloatingDragStarted: {
-            if (root.windowMode !== "float") {
-                root.windowMode = "float"
-            }
-            root.dragStartFloatX = root.floatX
-            root.dragStartFloatY = root.floatY
-        }
+        onFloatingDragStarted: root.beginFloatingDrag()
         onFloatingDragMoved: (dx, dy) => {
-            root.setFloatingPosition(root.dragStartFloatX + dx, root.dragStartFloatY + dy)
+            root.moveFloatingBy(dx, dy)
         }
-        onFloatingDragFinished: {
-            root.configureShellWindow()
-        }
+        onFloatingDragFinished: root.finishFloatingDrag()
         onHideRequested: keyboardController.hideKeyboard()
         onKeyPressed: (keyId, shift, ctrl, alt, meta) =>
             keyboardController.keyPressed(keyId, shift, ctrl, alt, meta)

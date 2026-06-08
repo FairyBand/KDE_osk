@@ -87,6 +87,15 @@ void ShellWindowAdapter::configure(QObject *windowObject,
     Q_UNUSED(width)
     Q_UNUSED(height)
 
+    if (mode == QStringLiteral("floatOverlay")) {
+        layerWindow->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop)
+                                | LayerShellQt::Window::AnchorBottom
+                                | LayerShellQt::Window::AnchorLeft
+                                | LayerShellQt::Window::AnchorRight);
+        layerWindow->setMargins(QMargins());
+        return;
+    }
+
     if (mode == QStringLiteral("dockTop")) {
         layerWindow->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop)
                                 | LayerShellQt::Window::AnchorLeft

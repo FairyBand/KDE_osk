@@ -170,9 +170,11 @@ Rectangle {
                         root.floatingDragFinished()
                     }
                 }
-                onActiveTranslationChanged: {
+                onCentroidChanged: {
                     if (active) {
-                        root.floatingDragMoved(activeTranslation.x, activeTranslation.y)
+                        const dx = centroid.position.x - centroid.pressPosition.x
+                        const dy = centroid.position.y - centroid.pressPosition.y
+                        root.floatingDragMoved(dx, dy)
                     }
                 }
             }
