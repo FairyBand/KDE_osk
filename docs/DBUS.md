@@ -78,6 +78,11 @@ Whether the shell successfully opened the current input backend.
 
 The most recent input-backend initialization or write error.
 
+`capsLockActive: bool`
+
+Best-effort CapsLock state read from the system keyboard LED state. The shell
+uses it to keep the CapsLock key checked when the lock is active.
+
 ## Signals
 
 `visibleChanged(bool visible)`
@@ -95,6 +100,10 @@ Emitted when focus-driven visibility state changes.
 `focusRectChanged()`
 
 Emitted when the focused text-field rectangle changes.
+
+`capsLockActiveChanged(bool active)`
+
+Emitted when the observed CapsLock state changes.
 
 `commitTextRequested(string text)`
 

@@ -20,6 +20,7 @@ Rectangle {
     property bool ignoreHardwareKeyboard: false
     property bool inputBackendAvailable: false
     property string inputBackendError: ""
+    property bool capsLockActive: false
     property string keyboardMode: "typing"
     property string symbolLayer: "letters"
     property string windowMode: "dockBottom"
@@ -63,7 +64,7 @@ Rectangle {
             return qsTr("Bksp")
         }
         if (keyId.length === 1 && keyId >= "a" && keyId <= "z") {
-            return root.shift ? keyId.toUpperCase() : keyId
+            return root.shift !== root.capsLockActive ? keyId.toUpperCase() : keyId
         }
         return keyId
     }
@@ -71,9 +72,6 @@ Rectangle {
     function outputKeyFor(keyId) {
         if (keyId === "Space") {
             return " "
-        }
-        if (keyId.length === 1 && keyId >= "a" && keyId <= "z") {
-            return root.shift ? keyId.toUpperCase() : keyId
         }
         return keyId
     }
@@ -122,7 +120,7 @@ Rectangle {
         if (toggleModifier(keyId)) {
             return
         }
-        root.keyPressed(outputKeyFor(keyId), false, false, false, false)
+        root.keyPressed(outputKeyFor(keyId), root.shift, root.ctrl, root.alt, root.meta)
         releaseActiveModifiers()
     }
 
@@ -386,6 +384,7 @@ Rectangle {
                                 || (modelData === "Ctrl" && root.ctrl)
                                 || (modelData === "Alt" && root.alt)
                                 || (modelData === "Meta" && root.meta)
+                                || (modelData === "CapsLock" && root.capsLockActive)
                             font.pixelSize: modelData.length > 6 ? 13 : 16
                             onKeyTriggered: keyId => root.sendKey(keyId)
                         }

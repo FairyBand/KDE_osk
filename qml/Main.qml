@@ -182,6 +182,7 @@ ApplicationWindow {
         ignoreHardwareKeyboard: keyboardController.ignoreHardwareKeyboard
         inputBackendAvailable: keyboardController.inputBackendAvailable
         inputBackendError: keyboardController.inputBackendError
+        capsLockActive: keyboardController.capsLockActive
         keyboardMode: shellSettings.keyboardMode
         windowMode: root.windowMode
 

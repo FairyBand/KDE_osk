@@ -16,6 +16,7 @@ class KeyboardController : public QObject
     Q_PROPERTY(bool ignoreHardwareKeyboard READ ignoreHardwareKeyboard WRITE setIgnoreHardwareKeyboard NOTIFY ignoreHardwareKeyboardChanged)
     Q_PROPERTY(bool inputBackendAvailable READ inputBackendAvailable NOTIFY inputBackendAvailableChanged)
     Q_PROPERTY(QString inputBackendError READ inputBackendError NOTIFY inputBackendErrorChanged)
+    Q_PROPERTY(bool capsLockActive READ capsLockActive NOTIFY capsLockActiveChanged)
     Q_PROPERTY(bool textFocusActive READ textFocusActive NOTIFY textFocusActiveChanged)
     Q_PROPERTY(int focusRectX READ focusRectX NOTIFY focusRectChanged)
     Q_PROPERTY(int focusRectY READ focusRectY NOTIFY focusRectChanged)
@@ -30,6 +31,7 @@ public:
     bool ignoreHardwareKeyboard() const;
     bool inputBackendAvailable() const;
     QString inputBackendError() const;
+    bool capsLockActive() const;
     bool textFocusActive() const;
     int focusRectX() const;
     int focusRectY() const;
@@ -55,6 +57,7 @@ signals:
     void ignoreHardwareKeyboardChanged(bool ignore);
     void inputBackendAvailableChanged(bool available);
     void inputBackendErrorChanged(const QString &error);
+    void capsLockActiveChanged(bool active);
     void textFocusActiveChanged(bool active);
     void focusRectChanged();
     void commitTextRequested(const QString &text);

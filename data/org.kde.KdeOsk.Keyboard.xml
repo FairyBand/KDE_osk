@@ -25,6 +25,7 @@
     <property name="ignoreHardwareKeyboard" type="b" access="readwrite"/>
     <property name="inputBackendAvailable" type="b" access="read"/>
     <property name="inputBackendError" type="s" access="read"/>
+    <property name="capsLockActive" type="b" access="read"/>
     <signal name="visibleChanged">
       <arg name="visible" type="b"/>
     </signal>
@@ -32,6 +33,9 @@
       <arg name="enabled" type="b"/>
     </signal>
     <signal name="textFocusActiveChanged">
+      <arg name="active" type="b"/>
+    </signal>
+    <signal name="capsLockActiveChanged">
       <arg name="active" type="b"/>
     </signal>
     <signal name="focusRectChanged"/>

@@ -17,6 +17,7 @@ KeyboardController::KeyboardController(HardwareKeyboardMonitor *hardwareKeyboard
             [this]() { updateVisibilityFromPolicy(); });
     connect(m_inputKeyboard, &UInputKeyboard::availableChanged, this, &KeyboardController::inputBackendAvailableChanged);
     connect(m_inputKeyboard, &UInputKeyboard::lastErrorChanged, this, &KeyboardController::inputBackendErrorChanged);
+    connect(m_inputKeyboard, &UInputKeyboard::capsLockActiveChanged, this, &KeyboardController::capsLockActiveChanged);
 }
 
 bool KeyboardController::visible() const
@@ -42,6 +43,11 @@ bool KeyboardController::inputBackendAvailable() const
 QString KeyboardController::inputBackendError() const
 {
     return m_inputKeyboard->lastError();
+}
+
+bool KeyboardController::capsLockActive() const
+{
+    return m_inputKeyboard->capsLockActive();
 }
 
 bool KeyboardController::textFocusActive() const

@@ -53,8 +53,11 @@ Expected:
 - Pressing letter, number, space, enter, and backspace keys edits the focused
   text field.
 - Holding a repeatable key starts repeating after a short delay.
+- Tapping `Shift` once and then a letter produces the shifted letter.
 - Full keyboard modifier keys such as `Ctrl`, `Alt`, `Meta`, and `Shift` affect
   the next normal key press and are then released automatically.
+- Toggling CapsLock on a physical keyboard updates the CapsLock key's checked
+  state in the full keyboard layout.
 - Tapping `Meta` opens the Plasma launcher if the desktop has the default Meta
   shortcut enabled.
 

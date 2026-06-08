@@ -1,9 +1,14 @@
 #include "UInputKeyboard.h"
 
 #include <QDebug>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QFileInfoList>
 #include <QHash>
 #include <QList>
 #include <QPair>
+#include <QSet>
 
 #include <cerrno>
 #include <cstring>
@@ -13,14 +18,49 @@
 #include <linux/uinput.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <utility>
 
 namespace
 {
 constexpr const char *DevicePath = "/dev/uinput";
+constexpr int CapsLockPollIntervalMs = 500;
 
 QString systemError(const QString &prefix)
 {
     return QStringLiteral("%1: %2").arg(prefix, QString::fromLocal8Bit(std::strerror(errno)));
+}
+
+bool readCapsLockLedState(bool *active)
+{
+    QDir ledDir(QStringLiteral("/sys/class/leds"));
+    const QFileInfoList entries = ledDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+    bool sawCapsLockLed = false;
+    bool anyActive = false;
+
+    for (const QFileInfo &entry : entries) {
+        if (!entry.fileName().contains(QStringLiteral("capslock"), Qt::CaseInsensitive)) {
+            continue;
+        }
+
+        QFile brightness(entry.absoluteFilePath() + QStringLiteral("/brightness"));
+        if (!brightness.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            continue;
+        }
+
+        sawCapsLockLed = true;
+        bool ok = false;
+        const int value = QString::fromLatin1(brightness.readAll()).trimmed().toInt(&ok);
+        if (ok && value > 0) {
+            anyActive = true;
+        }
+    }
+
+    if (!sawCapsLockLed) {
+        return false;
+    }
+
+    *active = anyActive;
+    return true;
 }
 
 QHash<QString, UInputKeyboard::KeyStroke> createKeyMap()
@@ -161,6 +201,10 @@ UInputKeyboard::UInputKeyboard(QObject *parent)
     : QObject(parent)
 {
     initialize();
+    connect(&m_capsLockPollTimer, &QTimer::timeout, this, &UInputKeyboard::refreshCapsLockState);
+    m_capsLockPollTimer.setInterval(CapsLockPollIntervalMs);
+    m_capsLockPollTimer.start();
+    refreshCapsLockState();
 }
 
 UInputKeyboard::~UInputKeyboard()
@@ -178,6 +222,11 @@ QString UInputKeyboard::lastError() const
     return m_lastError;
 }
 
+bool UInputKeyboard::capsLockActive() const
+{
+    return m_capsLockActive;
+}
+
 bool UInputKeyboard::sendKey(const QString &keyId, bool shift, bool ctrl, bool alt, bool meta)
 {
     if (!m_available) {
@@ -191,7 +240,11 @@ bool UInputKeyboard::sendKey(const QString &keyId, bool shift, bool ctrl, bool a
         return false;
     }
 
-    return sendCombo(modifierCodes(shift || stroke.requiresShift, ctrl, alt, meta), stroke.code);
+    const bool sent = sendCombo(modifierCodes(shift || stroke.requiresShift, ctrl, alt, meta), stroke.code);
+    if (sent && keyId == QStringLiteral("CapsLock")) {
+        QTimer::singleShot(60, this, &UInputKeyboard::refreshCapsLockState);
+    }
+    return sent;
 }
 
 bool UInputKeyboard::setModifierActive(const QString &keyId, bool active)
@@ -207,12 +260,26 @@ bool UInputKeyboard::setModifierActive(const QString &keyId, bool active)
         return false;
     }
 
-    return emitEvent(EV_KEY, stroke.code, active ? 1 : 0) && sync();
+    const bool alreadyActive = m_activeModifiers.contains(stroke.code);
+    if (alreadyActive == active) {
+        return true;
+    }
+
+    if (!emitEvent(EV_KEY, stroke.code, active ? 1 : 0) || !sync()) {
+        return false;
+    }
+
+    if (active) {
+        m_activeModifiers.insert(stroke.code);
+    } else {
+        m_activeModifiers.remove(stroke.code);
+    }
+    return true;
 }
 
 bool UInputKeyboard::initialize()
 {
-    m_fd = ::open(DevicePath, O_WRONLY | O_NONBLOCK);
+    m_fd = ::open(DevicePath, O_RDWR | O_NONBLOCK);
     if (m_fd < 0) {
         setLastError(systemError(QStringLiteral("Cannot open /dev/uinput")));
         qWarning() << m_lastError;
@@ -224,6 +291,10 @@ bool UInputKeyboard::initialize()
         qWarning() << m_lastError;
         closeDevice();
         return false;
+    }
+
+    if (::ioctl(m_fd, UI_SET_EVBIT, EV_LED) < 0 || ::ioctl(m_fd, UI_SET_LEDBIT, LED_CAPSL) < 0) {
+        qWarning() << systemError(QStringLiteral("Cannot configure CapsLock LED feedback"));
     }
 
     const QList<int> keys = {
@@ -353,6 +424,14 @@ void UInputKeyboard::closeDevice()
         return;
     }
 
+    for (int modifier : std::as_const(m_activeModifiers)) {
+        emitEvent(EV_KEY, modifier, 0);
+    }
+    if (!m_activeModifiers.isEmpty()) {
+        sync();
+        m_activeModifiers.clear();
+    }
+
     if (m_available) {
         ::ioctl(m_fd, UI_DEV_DESTROY);
     }
@@ -406,23 +485,41 @@ bool UInputKeyboard::sendKeyPress(int code)
 
 bool UInputKeyboard::sendCombo(const QVector<int> &modifiers, int code)
 {
+    QVector<int> temporaryModifiers;
+    const auto releaseTemporaryModifiers = [this, &temporaryModifiers]() {
+        bool released = true;
+        for (auto it = temporaryModifiers.crbegin(); it != temporaryModifiers.crend(); ++it) {
+            released = emitEvent(EV_KEY, *it, 0) && sync() && released;
+        }
+        temporaryModifiers.clear();
+        return released;
+    };
+
     for (int modifier : modifiers) {
+        if (m_activeModifiers.contains(modifier)) {
+            continue;
+        }
         if (!emitEvent(EV_KEY, modifier, 1) || !sync()) {
             return false;
         }
+        temporaryModifiers.append(modifier);
     }
 
     if (!sendKeyPress(code)) {
+        releaseTemporaryModifiers();
         return false;
     }
 
-    for (auto it = modifiers.crbegin(); it != modifiers.crend(); ++it) {
-        if (!emitEvent(EV_KEY, *it, 0) || !sync()) {
-            return false;
-        }
-    }
+    return releaseTemporaryModifiers();
+}
 
-    return true;
+void UInputKeyboard::refreshCapsLockState()
+{
+    bool active = false;
+    if (!readCapsLockLedState(&active)) {
+        active = false;
+    }
+    setCapsLockActive(active);
 }
 
 void UInputKeyboard::setAvailable(bool available)
@@ -441,6 +538,15 @@ void UInputKeyboard::setLastError(const QString &error)
     }
     m_lastError = error;
     emit lastErrorChanged(m_lastError);
+}
+
+void UInputKeyboard::setCapsLockActive(bool active)
+{
+    if (m_capsLockActive == active) {
+        return;
+    }
+    m_capsLockActive = active;
+    emit capsLockActiveChanged(m_capsLockActive);
 }
 
 bool UInputKeyboard::lookupKey(const QString &keyId, KeyStroke *stroke)
