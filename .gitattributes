@@ -1,0 +1,11 @@
+* text=auto
+
+*.cpp text eol=lf
+*.h text eol=lf
+*.qml text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+*.service.in text eol=lf
+*.desktop text eol=lf
+*.xml text eol=lf
+CMakeLists.txt text eol=lf

@@ -1,0 +1,14 @@
+[Unit]
+Description=KDE OSK shell
+Documentation=file://@CMAKE_INSTALL_FULL_DOCDIR@/ARCHITECTURE.md
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.kde.KdeOsk
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/kde-osk-shell
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=KDE OSK
+Comment=Wayland-first KDE Plasma on-screen keyboard
+Exec=kde-osk-shell
+Icon=input-keyboard-virtual
+Terminal=false
+Categories=Qt;KDE;Utility;Accessibility;
