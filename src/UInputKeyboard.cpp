@@ -194,6 +194,22 @@ bool UInputKeyboard::sendKey(const QString &keyId, bool shift, bool ctrl, bool a
     return sendCombo(modifierCodes(shift || stroke.requiresShift, ctrl, alt, meta), stroke.code);
 }
 
+bool UInputKeyboard::setModifierActive(const QString &keyId, bool active)
+{
+    if (!m_available) {
+        qWarning() << "Cannot set modifier; uinput backend is unavailable:" << m_lastError;
+        return false;
+    }
+
+    KeyStroke stroke;
+    if (!lookupKey(keyId, &stroke)) {
+        qWarning() << "Unsupported modifier:" << keyId;
+        return false;
+    }
+
+    return emitEvent(EV_KEY, stroke.code, active ? 1 : 0) && sync();
+}
+
 bool UInputKeyboard::initialize()
 {
     m_fd = ::open(DevicePath, O_WRONLY | O_NONBLOCK);
@@ -370,24 +386,38 @@ bool UInputKeyboard::emitEvent(unsigned short type, unsigned short code, int val
     return true;
 }
 
+bool UInputKeyboard::sync()
+{
+    return emitEvent(EV_SYN, SYN_REPORT, 0);
+}
+
+bool UInputKeyboard::sendKeyPress(int code)
+{
+    if (!emitEvent(EV_KEY, code, 1) || !sync()) {
+        return false;
+    }
+
+    if (!emitEvent(EV_KEY, code, 0) || !sync()) {
+        return false;
+    }
+
+    return true;
+}
+
 bool UInputKeyboard::sendCombo(const QVector<int> &modifiers, int code)
 {
     for (int modifier : modifiers) {
-        if (!emitEvent(EV_KEY, modifier, 1) || !emitEvent(EV_SYN, SYN_REPORT, 0)) {
+        if (!emitEvent(EV_KEY, modifier, 1) || !sync()) {
             return false;
         }
     }
 
-    if (!emitEvent(EV_KEY, code, 1) || !emitEvent(EV_SYN, SYN_REPORT, 0)) {
-        return false;
-    }
-
-    if (!emitEvent(EV_KEY, code, 0) || !emitEvent(EV_SYN, SYN_REPORT, 0)) {
+    if (!sendKeyPress(code)) {
         return false;
     }
 
     for (auto it = modifiers.crbegin(); it != modifiers.crend(); ++it) {
-        if (!emitEvent(EV_KEY, *it, 0) || !emitEvent(EV_SYN, SYN_REPORT, 0)) {
+        if (!emitEvent(EV_KEY, *it, 0) || !sync()) {
             return false;
         }
     }

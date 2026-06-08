@@ -23,13 +23,15 @@ Rectangle {
     property string keyboardMode: "typing"
     property string symbolLayer: "letters"
     property string windowMode: "dockBottom"
+    property bool draggingToolbar: false
 
     signal autoShowToggled(bool enabled)
     signal ignoreHardwareKeyboardToggled(bool ignore)
     signal windowModeRequested(string mode)
-    signal floatingMoveRequested(real dx, real dy)
+    signal floatingMoveRequested(real sceneX, real sceneY, real offsetX, real offsetY)
     signal hideRequested()
     signal keyPressed(string keyId, bool shift, bool ctrl, bool alt, bool meta)
+    signal modifierChanged(string keyId, bool active)
 
     readonly property var typingLetterRows: [
         ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
@@ -55,7 +57,7 @@ Rectangle {
             return qsTr("Space")
         }
         if (keyId === "Backspace") {
-            return qsTr("Back")
+            return qsTr("Bksp")
         }
         if (keyId.length === 1 && keyId >= "a" && keyId <= "z") {
             return root.shift ? keyId.toUpperCase() : keyId
@@ -92,18 +94,22 @@ Rectangle {
     function toggleModifier(keyId) {
         if (keyId === "Shift") {
             root.shift = !root.shift
+            root.modifierChanged("Shift", root.shift)
             return true
         }
         if (keyId === "Ctrl") {
             root.ctrl = !root.ctrl
+            root.modifierChanged("Ctrl", root.ctrl)
             return true
         }
         if (keyId === "Alt") {
             root.alt = !root.alt
+            root.modifierChanged("Alt", root.alt)
             return true
         }
         if (keyId === "Meta") {
-            root.keyPressed("Meta", false, false, false, false)
+            root.meta = !root.meta
+            root.modifierChanged("Meta", root.meta)
             return true
         }
         return false
@@ -113,12 +119,10 @@ Rectangle {
         if (toggleModifier(keyId)) {
             return
         }
-        root.keyPressed(outputKeyFor(keyId), root.shift, root.ctrl, root.alt, root.meta)
-        if (root.shift || root.ctrl || root.alt || root.meta) {
+        root.keyPressed(outputKeyFor(keyId), false, false, false, false)
+        if (root.shift) {
+            root.modifierChanged("Shift", false)
             root.shift = false
-            root.ctrl = false
-            root.alt = false
-            root.meta = false
         }
     }
 
@@ -128,9 +132,36 @@ Rectangle {
         spacing: 8
 
         RowLayout {
+            id: toolbar
             Layout.fillWidth: true
             Layout.preferredHeight: 36
             spacing: 10
+
+            DragHandler {
+                id: toolbarDrag
+                target: null
+                enabled: root.windowMode === "float"
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchScreen | PointerDevice.Stylus
+                margin: 0
+                property real grabOffsetX: 0
+                property real grabOffsetY: 0
+
+                onActiveChanged: {
+                    root.draggingToolbar = active
+                    if (active) {
+                        grabOffsetX = point.position.x
+                        grabOffsetY = point.position.y
+                    }
+                }
+                onCentroidChanged: {
+                    if (active) {
+                        root.floatingMoveRequested(centroid.scenePosition.x,
+                                                   centroid.scenePosition.y,
+                                                   grabOffsetX,
+                                                   grabOffsetY)
+                    }
+                }
+            }
 
             Label {
                 text: root.inputBackendAvailable
@@ -158,34 +189,8 @@ Rectangle {
                     width: 26
                     height: 18
                     radius: 4
-                    color: dragHandle.pressed ? "#9ccaff" : "#3a3f46"
+                    color: root.draggingToolbar ? "#9ccaff" : "#3a3f46"
                     border.color: "#6b7280"
-                }
-
-                MouseArea {
-                    id: dragHandle
-                    anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton
-                    cursorShape: Qt.SizeAllCursor
-                }
-
-                DragHandler {
-                    id: floatDragHandler
-                    target: null
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchScreen | PointerDevice.Stylus
-                    property real previousX: 0
-                    property real previousY: 0
-
-                    onActiveChanged: {
-                        previousX = 0
-                        previousY = 0
-                    }
-                    onActiveTranslationChanged: {
-                        root.floatingMoveRequested(activeTranslation.x - previousX,
-                                                   activeTranslation.y - previousY)
-                        previousX = activeTranslation.x
-                        previousY = activeTranslation.y
-                    }
                 }
             }
 
@@ -279,8 +284,9 @@ Rectangle {
                         KeyButton {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
+                            keyId: modelData
                             text: root.labelFor(modelData)
-                            onClicked: root.sendKey(modelData)
+                            onKeyTriggered: keyId => root.sendKey(keyId)
                         }
                     }
 
@@ -299,44 +305,52 @@ Rectangle {
                 KeyButton {
                     Layout.preferredWidth: 88
                     Layout.fillHeight: true
+                    keyId: "Shift"
+                    repeatable: false
                     text: root.shift ? qsTr("SHIFT") : qsTr("Shift")
                     checked: root.shift
-                    onClicked: root.shift = !root.shift
+                    onKeyTriggered: root.sendKey("Shift")
                 }
 
                 KeyButton {
                     Layout.preferredWidth: 78
                     Layout.fillHeight: true
+                    keyId: "Layer"
+                    repeatable: false
                     text: root.symbolLayer === "letters" ? qsTr("123") : qsTr("ABC")
-                    onClicked: root.symbolLayer = root.symbolLayer === "letters" ? "symbols" : "letters"
+                    onKeyTriggered: root.symbolLayer = root.symbolLayer === "letters" ? "symbols" : "letters"
                 }
 
                 KeyButton {
                     Layout.preferredWidth: 80
                     Layout.fillHeight: true
+                    keyId: "Tab"
                     text: qsTr("Tab")
-                    onClicked: root.sendKey("Tab")
+                    onKeyTriggered: root.sendKey("Tab")
                 }
 
                 KeyButton {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    keyId: "Space"
                     text: qsTr("Space")
-                    onClicked: root.sendKey("Space")
+                    onKeyTriggered: root.sendKey("Space")
                 }
 
                 KeyButton {
                     Layout.preferredWidth: 96
                     Layout.fillHeight: true
+                    keyId: "Enter"
                     text: qsTr("Enter")
-                    onClicked: root.sendKey("Enter")
+                    onKeyTriggered: root.sendKey("Enter")
                 }
 
                 KeyButton {
                     Layout.preferredWidth: 88
                     Layout.fillHeight: true
-                    text: qsTr("Back")
-                    onClicked: root.sendKey("Backspace")
+                    keyId: "Backspace"
+                    text: qsTr("Bksp")
+                    onKeyTriggered: root.sendKey("Backspace")
                 }
             }
         }
@@ -363,13 +377,15 @@ Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             Layout.preferredWidth: root.keyWeight(modelData)
+                            keyId: modelData
+                            repeatable: ["Shift", "Ctrl", "Alt", "Meta"].indexOf(modelData) === -1
                             text: root.labelFor(modelData)
                             checked: (modelData === "Shift" && root.shift)
                                 || (modelData === "Ctrl" && root.ctrl)
                                 || (modelData === "Alt" && root.alt)
                                 || (modelData === "Meta" && root.meta)
                             font.pixelSize: modelData.length > 6 ? 13 : 16
-                            onClicked: root.sendKey(modelData)
+                            onKeyTriggered: keyId => root.sendKey(keyId)
                         }
                     }
                 }

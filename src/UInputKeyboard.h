@@ -23,6 +23,7 @@ public:
     QString lastError() const;
 
     bool sendKey(const QString &keyId, bool shift, bool ctrl, bool alt, bool meta);
+    bool setModifierActive(const QString &keyId, bool active);
 
 signals:
     void availableChanged(bool available);
@@ -33,6 +34,8 @@ private:
     void closeDevice();
     bool enableKey(int code);
     bool emitEvent(unsigned short type, unsigned short code, int value);
+    bool sync();
+    bool sendKeyPress(int code);
     bool sendCombo(const QVector<int> &modifiers, int code);
     void setAvailable(bool available);
     void setLastError(const QString &error);

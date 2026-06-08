@@ -52,8 +52,10 @@ Expected:
 
 - Pressing letter, number, space, enter, and backspace keys edits the focused
   text field.
+- Holding a repeatable key starts repeating after a short delay.
 - Full keyboard modifier keys such as `Ctrl`, `Alt`, `Meta`, and `Shift` affect
-  the next key press.
+  subsequent key presses until toggled off. `Shift` is released after one
+  normal key press.
 - Tapping `Meta` opens the Plasma launcher if the desktop has the default Meta
   shortcut enabled.
 

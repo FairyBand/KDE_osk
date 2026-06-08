@@ -114,6 +114,7 @@ systemctl --user enable --now kde-osk-shell.service
 This repository currently contains the project scaffold and the first Qt/QML
 keyboard shell. It can show a typing keyboard or full keyboard, switch between
 floating/top-docked/bottom-docked window modes, and send basic keys through
-`uinput`. Desktop automatic show/hide, lock-screen integration, and SDDM
+`uinput`. It also supports long-press key repeat and sticky modifier keys.
+Desktop automatic show/hide, lock-screen integration, and SDDM
 integration are intentionally documented as follow-up milestones because they
 must be implemented through their respective trusted interfaces.
