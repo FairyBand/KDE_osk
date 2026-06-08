@@ -21,6 +21,12 @@ public:
                                int floatingY,
                                int width,
                                int height);
+    Q_INVOKABLE void setInputRegion(QObject *windowObject,
+                                    int x,
+                                    int y,
+                                    int width,
+                                    int height,
+                                    bool enabled);
 
 private:
     bool m_available = false;

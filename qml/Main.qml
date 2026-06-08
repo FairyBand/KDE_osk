@@ -14,10 +14,10 @@ ApplicationWindow {
     property bool batchingFloatMove: false
 
     readonly property bool layerShellActive: shellWindowAdapter.available
-    readonly property bool floatDragOverlayActive: layerShellActive && windowMode === "float" && floatDragActive
+    readonly property bool floatOverlayActive: layerShellActive && windowMode === "float"
 
-    width: floatDragOverlayActive ? Screen.width : windowMode === "float" ? floatingWidth : Screen.width
-    height: floatDragOverlayActive ? Screen.height : keyboard.implicitHeight
+    width: floatOverlayActive ? Screen.width : windowMode === "float" ? floatingWidth : Screen.width
+    height: floatOverlayActive ? Screen.height : keyboard.implicitHeight
     visible: keyboardController.visible
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
     color: "transparent"
@@ -59,9 +59,7 @@ ApplicationWindow {
         floatX = Math.max(0, Math.min(Math.round(nextX), maxFloatX()))
         floatY = Math.max(0, Math.min(Math.round(nextY), maxFloatY()))
         batchingFloatMove = false
-        if (!floatDragActive) {
-            configureShellWindow()
-        }
+        configureShellWindow()
     }
 
     function beginFloatingDrag() {
@@ -87,8 +85,14 @@ ApplicationWindow {
     }
 
     function configureShellWindow() {
-        const shellMode = floatDragOverlayActive ? "floatOverlay" : windowMode
+        const shellMode = floatOverlayActive ? "floatOverlay" : windowMode
         shellWindowAdapter.configure(root, shellMode, floatX, floatY, width, height)
+        shellWindowAdapter.setInputRegion(root,
+                                          keyboard.x,
+                                          keyboard.y,
+                                          keyboard.width,
+                                          keyboard.height,
+                                          floatOverlayActive)
     }
 
     Component.onCompleted: configureShellWindow()
@@ -116,8 +120,8 @@ ApplicationWindow {
         id: keyboard
         width: root.windowMode === "float" ? root.floatingWidth : root.width
         height: implicitHeight
-        x: root.floatDragOverlayActive ? root.floatX : 0
-        y: root.floatDragOverlayActive ? root.floatY : 0
+        x: root.floatOverlayActive ? root.floatX : 0
+        y: root.floatOverlayActive ? root.floatY : 0
         autoShowEnabled: keyboardController.autoShowEnabled
         hardwareKeyboardPresent: hardwareKeyboardMonitor.hardwareKeyboardPresent
         ignoreHardwareKeyboard: keyboardController.ignoreHardwareKeyboard

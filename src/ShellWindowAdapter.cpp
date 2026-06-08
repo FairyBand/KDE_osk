@@ -2,6 +2,7 @@
 
 #include <QDebug>
 #include <QMargins>
+#include <QRegion>
 #include <QString>
 #include <QWindow>
 #include <QtGlobal>
@@ -116,4 +117,24 @@ void ShellWindowAdapter::configure(QObject *windowObject,
                             | LayerShellQt::Window::AnchorRight);
     layerWindow->setMargins(QMargins());
 #endif
+}
+
+void ShellWindowAdapter::setInputRegion(QObject *windowObject,
+                                        int x,
+                                        int y,
+                                        int width,
+                                        int height,
+                                        bool enabled)
+{
+    QWindow *window = qobject_cast<QWindow *>(windowObject);
+    if (window == nullptr) {
+        return;
+    }
+
+    if (!enabled) {
+        window->setMask(QRegion());
+        return;
+    }
+
+    window->setMask(QRegion(qMax(0, x), qMax(0, y), qMax(0, width), qMax(0, height)));
 }
