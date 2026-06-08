@@ -108,3 +108,13 @@ void ShellWindowAdapter::configure(QObject *windowObject,
     layerWindow->setMargins(QMargins());
 #endif
 }
+
+void ShellWindowAdapter::moveFloating(QObject *windowObject, int floatingX, int floatingY)
+{
+    QWindow *window = qobject_cast<QWindow *>(windowObject);
+    if (window == nullptr) {
+        return;
+    }
+
+    window->setPosition(qMax(0, floatingX), qMax(0, floatingY));
+}

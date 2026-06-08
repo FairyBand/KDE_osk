@@ -21,6 +21,7 @@ public:
                                int floatingY,
                                int width,
                                int height);
+    Q_INVOKABLE void moveFloating(QObject *windowObject, int floatingX, int floatingY);
 
 private:
     bool m_available = false;

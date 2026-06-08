@@ -28,7 +28,9 @@ Rectangle {
     signal autoShowToggled(bool enabled)
     signal ignoreHardwareKeyboardToggled(bool ignore)
     signal windowModeRequested(string mode)
-    signal floatingMoveRequested(real sceneX, real sceneY, real offsetX, real offsetY)
+    signal floatingDragStarted()
+    signal floatingDragMoved(real dx, real dy)
+    signal floatingDragFinished()
     signal hideRequested()
     signal keyPressed(string keyId, bool shift, bool ctrl, bool alt, bool meta)
     signal modifierChanged(string keyId, bool active)
@@ -120,9 +122,25 @@ Rectangle {
             return
         }
         root.keyPressed(outputKeyFor(keyId), false, false, false, false)
+        releaseActiveModifiers()
+    }
+
+    function releaseActiveModifiers() {
         if (root.shift) {
-            root.modifierChanged("Shift", false)
             root.shift = false
+            root.modifierChanged("Shift", false)
+        }
+        if (root.ctrl) {
+            root.ctrl = false
+            root.modifierChanged("Ctrl", false)
+        }
+        if (root.alt) {
+            root.alt = false
+            root.modifierChanged("Alt", false)
+        }
+        if (root.meta) {
+            root.meta = false
+            root.modifierChanged("Meta", false)
         }
     }
 
@@ -143,22 +161,18 @@ Rectangle {
                 enabled: root.windowMode === "float"
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchScreen | PointerDevice.Stylus
                 margin: 0
-                property real grabOffsetX: 0
-                property real grabOffsetY: 0
 
                 onActiveChanged: {
                     root.draggingToolbar = active
                     if (active) {
-                        grabOffsetX = point.position.x
-                        grabOffsetY = point.position.y
+                        root.floatingDragStarted()
+                    } else {
+                        root.floatingDragFinished()
                     }
                 }
-                onCentroidChanged: {
+                onActiveTranslationChanged: {
                     if (active) {
-                        root.floatingMoveRequested(centroid.scenePosition.x,
-                                                   centroid.scenePosition.y,
-                                                   grabOffsetX,
-                                                   grabOffsetY)
+                        root.floatingDragMoved(activeTranslation.x, activeTranslation.y)
                     }
                 }
             }
@@ -177,21 +191,6 @@ Rectangle {
 
             ButtonGroup {
                 id: keyboardModeGroup
-            }
-
-            Item {
-                Layout.preferredWidth: 38
-                Layout.fillHeight: true
-                visible: root.windowMode === "float"
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: 26
-                    height: 18
-                    radius: 4
-                    color: root.draggingToolbar ? "#9ccaff" : "#3a3f46"
-                    border.color: "#6b7280"
-                }
             }
 
             RowLayout {
