@@ -42,6 +42,12 @@ surface traffic proxying are the next steps.
 `kde-osk-kwin-broker --self-test-protocol-filter` validates this registry
 filtering without needing a live KWin socket.
 
+For real-machine bring-up, `--experimental-panel-branch` starts a
+`kde-osk-input-panel` child with a broker-managed `WAYLAND_SOCKET` once the
+reserved input-panel global has been observed. This is intentionally gated: the
+branch can complete the registry handshake, but full `wl_registry.bind` object
+mapping and surface traffic proxying are still under active development.
+
 The old `exec` delegation path is kept as an explicit compatibility mode with
 `--exec-fcitx5`.
 

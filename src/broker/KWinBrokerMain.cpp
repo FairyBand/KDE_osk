@@ -13,6 +13,7 @@
 #include <QDebug>
 #include <QHash>
 #include <QProcessEnvironment>
+#include <QProcess>
 #include <QSet>
 #include <QSocketNotifier>
 #include <QStringList>
@@ -87,6 +88,12 @@ int waylandSocketFd()
     return ok ? fd : -1;
 #endif
 }
+
+struct PanelBranchConfig {
+    bool enabled = false;
+    QString command = QStringLiteral("kde-osk-input-panel");
+    QStringList arguments;
+};
 
 class WaylandProtocolInspector
 {
@@ -582,15 +589,23 @@ int runProtocolFilterSelfTest()
 class WaylandSocketProxy final : public QObject
 {
 public:
-    WaylandSocketProxy(int upstreamFd, int downstreamFd, QObject *parent = nullptr)
+    WaylandSocketProxy(int upstreamFd, int downstreamFd, PanelBranchConfig panelBranchConfig, QObject *parent = nullptr)
         : QObject(parent)
         , m_upstreamFd(upstreamFd)
         , m_downstreamFd(downstreamFd)
+        , m_panelBranchConfig(std::move(panelBranchConfig))
     {
+        connect(&m_panelProcess, &QProcess::errorOccurred, this, [](QProcess::ProcessError error) {
+            qWarning() << "KDE OSK panel branch process error:" << error;
+        });
+        connect(&m_panelProcess, &QProcess::finished, this, [](int exitCode, QProcess::ExitStatus status) {
+            qWarning() << "KDE OSK panel branch process finished:" << exitCode << status;
+        });
     }
 
     ~WaylandSocketProxy() override
     {
+        closePanelBranchSocket();
         closeFds(m_upstreamToDownstreamFds);
         closeFds(m_downstreamToUpstreamFds);
         closeFd(m_upstreamFd);
@@ -722,6 +737,7 @@ private:
             if (bytesRead > 0) {
                 if (direction == WaylandProtocolInspector::Direction::UpstreamToDownstream) {
                     m_protocolInspector.filterUpstreamToDownstream(chunk, bytesRead, buffer);
+                    maybeStartPanelBranch();
                 } else {
                     buffer.append(chunk, bytesRead);
                     m_protocolInspector.inspect(direction, chunk, bytesRead);
@@ -859,26 +875,196 @@ private:
         QCoreApplication::quit();
     }
 
+    bool panelBranchReady() const
+    {
+        const QVector<WaylandProtocolInspector::RegistryGlobal> globals =
+            m_protocolInspector.projectedGlobals(WaylandProtocolInspector::RegistryView::KdeOskPanelBranch);
+        bool hasCompositor = false;
+        bool hasInputPanel = false;
+        for (const WaylandProtocolInspector::RegistryGlobal &global : globals) {
+            hasCompositor = hasCompositor || global.interfaceName == QStringLiteral("wl_compositor");
+            hasInputPanel = hasInputPanel || global.interfaceName == QStringLiteral("zwp_input_panel_v1");
+        }
+        return hasCompositor && hasInputPanel;
+    }
+
+    void maybeStartPanelBranch()
+    {
+        if (!m_panelBranchConfig.enabled || m_panelStarted || !panelBranchReady()) {
+            return;
+        }
+
+#ifndef Q_OS_UNIX
+        qWarning() << "KDE OSK panel branch can only be launched on Unix-like systems.";
+#else
+        int sockets[2] = {-1, -1};
+        if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0) {
+            qWarning() << "Failed to create KDE OSK panel branch socketpair:" << strerror(errno);
+            return;
+        }
+
+        m_panelFd = sockets[0];
+        if (!setNonBlocking(m_panelFd)) {
+            closeFd(m_panelFd);
+            close(sockets[1]);
+            return;
+        }
+
+        const int childFd = sockets[1];
+        const int flags = fcntl(childFd, F_GETFD, 0);
+        if (flags >= 0) {
+            fcntl(childFd, F_SETFD, flags & ~FD_CLOEXEC);
+        }
+
+        m_panelEndpoint = new PanelBranchEndpoint(
+            m_protocolInspector.projectedGlobals(WaylandProtocolInspector::RegistryView::KdeOskPanelBranch));
+        m_panelReader = new QSocketNotifier(m_panelFd, QSocketNotifier::Read, this);
+        m_panelWriter = new QSocketNotifier(m_panelFd, QSocketNotifier::Write, this);
+        m_panelWriter->setEnabled(false);
+        connect(m_panelReader, &QSocketNotifier::activated, this, [this]() {
+            readPanelBranch();
+        });
+        connect(m_panelWriter, &QSocketNotifier::activated, this, [this]() {
+            writePanelBranch();
+        });
+
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert(QStringLiteral("WAYLAND_SOCKET"), QString::number(childFd));
+
+        m_panelProcess.setProgram(m_panelBranchConfig.command);
+        m_panelProcess.setArguments(m_panelBranchConfig.arguments);
+        m_panelProcess.setProcessEnvironment(environment);
+        m_panelProcess.start();
+        if (!m_panelProcess.waitForStarted(3000)) {
+            qWarning() << "Failed to start KDE OSK panel branch process:" << m_panelBranchConfig.command << m_panelProcess.errorString();
+            closePanelBranchSocket();
+            close(sockets[1]);
+            return;
+        }
+
+        close(sockets[1]);
+        m_panelStarted = true;
+        qInfo() << "Started experimental KDE OSK panel branch process:" << m_panelBranchConfig.command << m_panelBranchConfig.arguments;
+#endif
+    }
+
+    void readPanelBranch()
+    {
+#ifndef Q_OS_UNIX
+        return;
+#else
+        if (m_panelEndpoint == nullptr) {
+            return;
+        }
+
+        m_panelReader->setEnabled(false);
+        char chunk[8192];
+        while (true) {
+            const ssize_t bytesRead = read(m_panelFd, chunk, sizeof(chunk));
+            if (bytesRead > 0) {
+                m_panelEndpoint->receive(chunk, bytesRead, m_panelOutput);
+                continue;
+            }
+            if (bytesRead == 0) {
+                qWarning() << "KDE OSK panel branch closed its Wayland socket.";
+                closePanelBranchSocket();
+                return;
+            }
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+
+            qWarning() << "Failed to read KDE OSK panel branch socket:" << strerror(errno);
+            closePanelBranchSocket();
+            return;
+        }
+
+        m_panelWriter->setEnabled(!m_panelOutput.isEmpty());
+        if (m_panelFd >= 0) {
+            m_panelReader->setEnabled(true);
+        }
+#endif
+    }
+
+    void writePanelBranch()
+    {
+#ifndef Q_OS_UNIX
+        return;
+#else
+        m_panelWriter->setEnabled(false);
+        while (!m_panelOutput.isEmpty()) {
+            const ssize_t bytesWritten = write(m_panelFd, m_panelOutput.constData(), static_cast<size_t>(m_panelOutput.size()));
+            if (bytesWritten > 0) {
+                m_panelOutput.remove(0, bytesWritten);
+                continue;
+            }
+            if (bytesWritten == 0) {
+                break;
+            }
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+
+            qWarning() << "Failed to write KDE OSK panel branch socket:" << strerror(errno);
+            closePanelBranchSocket();
+            return;
+        }
+
+        m_panelWriter->setEnabled(!m_panelOutput.isEmpty());
+#endif
+    }
+
+    void closePanelBranchSocket()
+    {
+        if (m_panelReader != nullptr) {
+            delete m_panelReader;
+            m_panelReader = nullptr;
+        }
+        if (m_panelWriter != nullptr) {
+            delete m_panelWriter;
+            m_panelWriter = nullptr;
+        }
+        delete m_panelEndpoint;
+        m_panelEndpoint = nullptr;
+        m_panelOutput.clear();
+        closeFd(m_panelFd);
+    }
+
     int m_upstreamFd = -1;
     int m_downstreamFd = -1;
+    int m_panelFd = -1;
     QByteArray m_upstreamToDownstream;
     QByteArray m_downstreamToUpstream;
+    QByteArray m_panelOutput;
     QVector<int> m_upstreamToDownstreamFds;
     QVector<int> m_downstreamToUpstreamFds;
     WaylandProtocolInspector m_protocolInspector;
+    PanelBranchConfig m_panelBranchConfig;
+    bool m_panelStarted = false;
+    PanelBranchEndpoint *m_panelEndpoint = nullptr;
+    QProcess m_panelProcess;
     QSocketNotifier *m_upstreamReader = nullptr;
     QSocketNotifier *m_downstreamReader = nullptr;
     QSocketNotifier *m_upstreamWriter = nullptr;
     QSocketNotifier *m_downstreamWriter = nullptr;
+    QSocketNotifier *m_panelReader = nullptr;
+    QSocketNotifier *m_panelWriter = nullptr;
 };
 
 class FcitxSocketDelegate final : public QObject
 {
 public:
-    FcitxSocketDelegate(int fd, QString displayName, int timeoutMs, QObject *parent = nullptr)
+    FcitxSocketDelegate(int fd, QString displayName, int timeoutMs, PanelBranchConfig panelBranchConfig, QObject *parent = nullptr)
         : QObject(parent)
         , m_fd(fd)
         , m_displayName(std::move(displayName))
+        , m_panelBranchConfig(std::move(panelBranchConfig))
         , m_bus(QDBusConnection::sessionBus())
         , m_watcher(FcitxService,
                     m_bus,
@@ -975,7 +1161,7 @@ private:
             return;
         }
 
-        auto *proxy = new WaylandSocketProxy(m_fd, proxySockets[0], this);
+        auto *proxy = new WaylandSocketProxy(m_fd, proxySockets[0], m_panelBranchConfig, this);
         if (!proxy->start()) {
             delete proxy;
             close(proxySockets[1]);
@@ -1027,6 +1213,7 @@ private:
 
     int m_fd = -1;
     QString m_displayName;
+    PanelBranchConfig m_panelBranchConfig;
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;
     QTimer m_timeout;
@@ -1068,6 +1255,24 @@ int main(int argc, char *argv[])
         QStringLiteral("self-test-protocol-filter"),
         QStringLiteral("Run the broker Wayland protocol filter self-test and exit."));
     parser.addOption(selfTestProtocolFilterOption);
+
+    QCommandLineOption experimentalPanelBranchOption(
+        QStringLiteral("experimental-panel-branch"),
+        QStringLiteral("Start the experimental KDE OSK panel downstream branch."));
+    parser.addOption(experimentalPanelBranchOption);
+
+    QCommandLineOption panelCommandOption(
+        QStringLiteral("panel-command"),
+        QStringLiteral("Command used for the experimental KDE OSK panel branch."),
+        QStringLiteral("command"),
+        QStringLiteral("kde-osk-input-panel"));
+    parser.addOption(panelCommandOption);
+
+    QCommandLineOption panelArgumentOption(
+        QStringLiteral("panel-arg"),
+        QStringLiteral("Extra argument passed to the experimental KDE OSK panel process. Can be repeated."),
+        QStringLiteral("argument"));
+    parser.addOption(panelArgumentOption);
 
     QCommandLineOption execFcitx5Option(
         QStringLiteral("exec-fcitx5"),
@@ -1113,9 +1318,15 @@ int main(int argc, char *argv[])
 
     bool timeoutOk = false;
     const int timeoutMs = parser.value(timeoutOption).toInt(&timeoutOk);
+    PanelBranchConfig panelBranchConfig;
+    panelBranchConfig.enabled = parser.isSet(experimentalPanelBranchOption);
+    panelBranchConfig.command = parser.value(panelCommandOption);
+    panelBranchConfig.arguments = parser.values(panelArgumentOption);
+
     FcitxSocketDelegate delegate(socketFd,
                                  environment.value(QStringLiteral("WAYLAND_DISPLAY")),
                                  timeoutOk ? timeoutMs : 10000,
+                                 panelBranchConfig,
                                  &app);
     delegate.start();
 
