@@ -18,3 +18,8 @@ These references guide the project constraints and integration choices:
 - [SDDM configuration manual](https://man.archlinux.org/man/sddm.conf.5.en):
   SDDM has greeter-level input method configuration and separate Wayland
   compositor startup behavior.
+- [KDE Plasma SDDM Wayland config](https://github.com/KDE/plasma-workspace/blob/master/sddm-wayland-session/plasma-wayland.conf):
+  KDE's greeter Wayland path starts a dedicated `kwin_wayland` instance and
+  passes the virtual keyboard through `--inputmethod`.
+- [KDE plasma-keyboard](https://github.com/KDE/plasma-keyboard):
+  Reference implementation for a KWin input-method-v1 based virtual keyboard.

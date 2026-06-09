@@ -26,7 +26,9 @@ events. For that reason, this project is split into trusted integration points:
 - `fcitx5-kde-osk-bridge`: planned fcitx5 addon that observes fcitx5 input
   context focus and asks the shell to show or hide without replacing fcitx5.
 - `kde-osk-lockscreen`: planned Plasma lock-screen integration.
-- `kde-osk-sddm`: planned SDDM greeter integration.
+- `kde-osk-sddm-inputmethod`: SDDM greeter-only Wayland input-method backend
+  that works through the greeter KWin instance without changing the SDDM theme
+  or the user's desktop fcitx5 virtual-keyboard backend.
 
 The first implementation milestone builds the shell and device monitor, then
 adds the fcitx5 bridge so desktop-session focus can drive visibility while
@@ -38,18 +40,24 @@ See [docs/DBUS.md](docs/DBUS.md) for the first shell control API.
 
 ## Build
 
-Linux with Qt 6.4 or newer, libudev, KDE LayerShellQt, and the kernel uinput device is
-required for the Wayland test path.
+Linux with Qt 6.4 or newer, libudev, KDE LayerShellQt, and the kernel uinput
+device is required for the desktop Wayland test path. Building the SDDM greeter
+input-method backend additionally needs Qt Wayland client private development
+files, Extra CMake Modules, and wayland-protocols.
 
 Typical dependencies:
 
 ```sh
 # Arch Linux
-sudo pacman -S cmake extra-cmake-modules qt6-base qt6-declarative qt6-quickcontrols2 qt6-wayland layer-shell-qt systemd
+sudo pacman -S cmake extra-cmake-modules qt6-base qt6-declarative qt6-quickcontrols2 qt6-wayland wayland-protocols layer-shell-qt systemd
 
 # Debian/Ubuntu family
-sudo apt install cmake qt6-base-dev qt6-declarative-dev qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window qml6-module-qtquick-templates qml6-module-qtquick-nativestyle qml6-module-qtqml-workerscript qt6-wayland libudev-dev liblayershellqtinterface-dev pkg-config
+sudo apt install cmake extra-cmake-modules qt6-base-dev qt6-declarative-dev qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window qml6-module-qtquick-templates qml6-module-qtquick-nativestyle qml6-module-qtqml-workerscript qt6-wayland qt6-wayland-dev wayland-protocols libudev-dev liblayershellqtinterface-dev pkg-config
 ```
+
+Some Debian/Ubuntu releases do not ship the Qt Wayland client private headers
+needed to build `kde-osk-sddm-inputmethod`; in that case CMake leaves the SDDM
+backend disabled while still building the desktop shell.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -116,5 +124,7 @@ keyboard shell. It can show a typing keyboard or full keyboard, switch between
 floating/top-docked/bottom-docked window modes, and send basic keys through
 `uinput`. It also supports long-press key repeat and sticky modifier keys.
 Desktop automatic show/hide, lock-screen integration, and SDDM
-integration are intentionally documented as follow-up milestones because they
-must be implemented through their respective trusted interfaces.
+integration must be implemented through their respective trusted interfaces.
+The current tree includes the first SDDM Wayland input-method backend; it is
+started only by SDDM's greeter KWin and does not replace fcitx5 in the user's
+Plasma desktop session.

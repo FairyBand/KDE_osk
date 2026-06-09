@@ -1,0 +1,6 @@
+[General]
+DisplayServer=wayland
+InputMethod=
+
+[Wayland]
+CompositorCommand=kwin_wayland --no-global-shortcuts --no-lockscreen --inputmethod @CMAKE_INSTALL_FULL_BINDIR@/kde-osk-sddm-inputmethod --locale1

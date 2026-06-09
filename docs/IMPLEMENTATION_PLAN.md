@@ -41,27 +41,40 @@ the addon so the QML UI remains independent from fcitx5 internals.
 
 ## 3. Lock Screen
 
-Reuse the keyboard QML component inside the Plasma lock-screen process. This is
-the correct place to edit the password field because the lock screen owns that
-field and runs with the right trust boundary.
+Reuse the keyboard QML component inside the Plasma lock-screen process or a
+dedicated kscreenlocker integration. The lock screen is part of the user's
+already running Plasma session, so KDE OSK must not replace the desktop KWin
+virtual-keyboard backend. That backend remains fcitx5.
 
 Done criteria:
 
 - No external keyboard: password field focus opens the OSK.
 - External keyboard: password field focus does not open the OSK.
 - Unlock behavior is unchanged with fcitx5 installed.
+- The user's Plasma virtual-keyboard/input-method setting is not changed.
 
 ## 4. SDDM
 
-Build a greeter-side integration. The SDDM greeter cannot depend on the user's
-desktop session D-Bus service, so the login keyboard should be loaded by the
-greeter theme or a greeter plugin.
+Build a greeter-side Wayland input-method backend, not an SDDM theme fork. KDE
+Breeze already exposes a virtual-keyboard button that talks to the greeter KWin
+virtual-keyboard path. KDE OSK should attach to that path by configuring only
+the SDDM greeter compositor command:
+
+```ini
+[Wayland]
+CompositorCommand=kwin_wayland --no-global-shortcuts --no-lockscreen --inputmethod /usr/bin/kde-osk-sddm-inputmethod --locale1
+```
+
+This SDDM KWin instance is separate from the user's later desktop KWin
+instance. The desktop Plasma virtual-keyboard backend remains fcitx5.
 
 Done criteria:
 
 - No external keyboard: password field focus opens the OSK on the login screen.
 - External keyboard: password field focus does not open the OSK.
 - The login password is delivered directly to the greeter's password input.
+- The installed Breeze SDDM theme is not modified or copied.
+- No user-session `kwinrc` or Plasma virtual-keyboard setting is changed.
 
 ## 5. Packaging
 

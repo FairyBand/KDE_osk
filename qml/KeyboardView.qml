@@ -29,6 +29,7 @@ Rectangle {
     property string keyboardMode: "typing"
     property string symbolLayer: "letters"
     property string windowMode: "dockBottom"
+    property bool showToolbar: true
     property bool draggingToolbar: false
 
     signal autoShowToggled(bool enabled)
@@ -288,8 +289,9 @@ Rectangle {
 
         RowLayout {
             id: toolbar
+            visible: root.showToolbar
             Layout.fillWidth: true
-            Layout.preferredHeight: 36
+            Layout.preferredHeight: visible ? 36 : 0
             spacing: 10
 
             DragHandler {

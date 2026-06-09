@@ -141,3 +141,44 @@ Plasma virtual keyboard backend.
 The temporary `uinput` backend sends virtual hardware key events. It is useful
 for basic testing, but the planned fcitx5 bridge is still required for polished
 text commit behavior, candidate integration, and reliable focus-driven display.
+
+## SDDM Smoke Test
+
+After installing with `-DCMAKE_INSTALL_PREFIX=/usr`, install the SDDM greeter
+Wayland input-method config:
+
+```sh
+sudo install-sddm-inputmethod.sh /usr
+```
+
+This writes `/etc/sddm.conf.d/kde-osk-wayland.conf`, which affects only the
+SDDM greeter compositor command. It must not change the user's Plasma
+virtual-keyboard backend; fcitx5 should remain configured for the desktop
+session.
+
+Expected:
+
+- SDDM starts a Wayland greeter using the normal Breeze theme.
+- The existing Breeze virtual-keyboard button opens the KDE OSK panel.
+- The keyboard appears for the password field when no external USB or Bluetooth
+  keyboard is connected.
+- Typing on the on-screen keyboard changes the password field through KWin's
+  greeter input-method protocol, without using the user-session D-Bus service.
+- Connecting an external keyboard suppresses keyboard display.
+- After logging in, Plasma still uses fcitx5 as its virtual-keyboard/input
+  method backend.
+
+## Lock-Screen Integration Smoke Test
+
+The lock-screen integration is still a planned milestone. It must not use the
+SDDM greeter input-method backend because the lock screen belongs to the
+already logged-in Plasma session, whose virtual-keyboard backend must remain
+fcitx5.
+
+Expected future behavior:
+
+- The keyboard appears when the lock-screen password field has focus and no
+  external keyboard is connected.
+- Text is written inside the kscreenlocker trust boundary.
+- The desktop `kde-osk-shell` D-Bus service is not required.
+- The user's Plasma virtual-keyboard setting remains fcitx5.

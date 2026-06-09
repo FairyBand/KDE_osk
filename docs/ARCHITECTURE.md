@@ -80,10 +80,16 @@ fcitx5 UI protocol or addon API.
 
 ### Plasma Lock Screen
 
-The lock screen runs in a privileged Plasma context. It should load the same
-QML keyboard view or a thin wrapper around it and send text directly to the
-lock-screen password field. The regular desktop D-Bus session may not be
-available or appropriate here, so this must be a dedicated integration.
+The lock screen runs inside the already logged-in Plasma session. That means it
+shares the user's desktop KWin virtual-keyboard backend, which must remain
+fcitx5 for CJK and normal input-method workflows. KDE OSK must not replace the
+desktop virtual keyboard backend to make the lock screen work.
+
+The lock-screen integration should therefore be a dedicated kscreenlocker or
+lock-screen QML integration that loads the shared keyboard view in the trusted
+lock-screen process and writes directly to the lock-screen password field. The
+regular desktop D-Bus service is not an appropriate text-entry path for the
+lock screen.
 
 The shared `KeyboardView.qml` component is intentionally controller-agnostic:
 it emits key and visibility-policy signals instead of directly calling the
@@ -91,27 +97,34 @@ desktop session service. That keeps it reusable in the lock-screen process.
 
 ### SDDM Greeter
 
-The SDDM greeter should integrate the keyboard in the greeter theme or through
-Qt Virtual Keyboard compatible input panels. SDDM already has greeter-level
-configuration for an input method, but the project should avoid relying on a
-global desktop-session process during login.
+The SDDM greeter runs before any user Plasma session exists. On KDE's Wayland
+greeter path, SDDM starts a greeter-only `kwin_wayland` instance through its
+`[Wayland] CompositorCommand`. That compositor can have its own
+`--inputmethod` command, separate from the user's desktop KWin configuration.
 
-Recommended first target:
+The stable SDDM route is to keep the Breeze greeter theme untouched and provide
+a greeter-only Wayland input-method backend:
 
-- Ship an SDDM theme helper that imports the keyboard QML component.
-- Gate automatic display on the same external-keyboard detection policy.
-- Keep password entry local to the greeter process.
+- `kde-osk-sddm-inputmethod` is started only by SDDM's greeter KWin.
+- SDDM's compositor command points to it with `--inputmethod`.
+- The Breeze virtual-keyboard button continues to use KDE's existing
+  `KWinVirtualKeyboard` path.
+- No user `kwinrc`, Plasma virtual-keyboard setting, or fcitx5 desktop setup is
+  changed.
+- External USB/Bluetooth keyboard detection still suppresses the OSK.
 
-The shared QML files are installed under `${datadir}/kde-osk/qml` for greeter
-and lock-screen integrations that cannot import the executable-embedded module.
+The project intentionally does not install a KDE virtual-keyboard desktop file
+for the greeter backend. It is not a desktop-session alternative to fcitx5; it
+is an SDDM greeter component.
 
 ## Milestones
 
 1. Build and install `kde-osk-shell`.
 2. Provide a D-Bus API and hardware keyboard suppression.
 3. Implement the fcitx5 bridge for desktop focus and text commit.
-4. Package a Plasma lock-screen integration.
-5. Package an SDDM greeter integration.
+4. Package a Plasma lock-screen integration that does not replace the user's
+   desktop virtual-keyboard backend.
+5. Package the SDDM greeter input-method backend and SDDM configuration helper.
 6. Add settings UI for layouts, device policy, height, opacity, and haptics.
 
 ## Non-Goals For Milestone 1
@@ -119,6 +132,7 @@ and lock-screen integrations that cannot import the executable-embedded module.
 - No fcitx5 candidate-row embedding.
 - No global key injection from an unprivileged Wayland client.
 - No replacement of Plasma's fcitx5 virtual keyboard setting.
+- No SDDM theme fork for the primary greeter integration.
 
 ## References
 
