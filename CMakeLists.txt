@@ -20,6 +20,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUDEV REQUIRED IMPORTED_TARGET libudev)
 
 option(KDE_OSK_BUILD_FCITX5_BRIDGE "Build the optional fcitx5 desktop focus bridge" ON)
+option(KDE_OSK_BUILD_KWIN_BROKER "Build the KDE Plasma virtual-keyboard broker" ON)
 option(KDE_OSK_BUILD_SDDM_INPUTMETHOD "Build the SDDM greeter Wayland input-method backend" ON)
 option(KDE_OSK_USE_LAYER_SHELL "Use LayerShellQt for Wayland keyboard window placement" ON)
 if(KDE_OSK_USE_LAYER_SHELL)
@@ -136,6 +137,12 @@ configure_file(
 )
 
 configure_file(
+    data/kde-osk-kwin-broker.desktop.in
+    ${CMAKE_CURRENT_BINARY_DIR}/kde-osk-kwin-broker.desktop
+    @ONLY
+)
+
+configure_file(
     data/kde-osk-sddm-wayland.conf.in
     ${CMAKE_CURRENT_BINARY_DIR}/kde-osk-sddm-wayland.conf
     @ONLY
@@ -204,6 +211,23 @@ if(KDE_OSK_BUILD_FCITX5_BRIDGE AND TARGET Fcitx5::Core AND TARGET Fcitx5::Utils)
     )
 elseif(KDE_OSK_BUILD_FCITX5_BRIDGE)
     message(WARNING "Fcitx5 development files were not found. The fcitx5 bridge will not be built.")
+endif()
+
+if(KDE_OSK_BUILD_KWIN_BROKER)
+    qt_add_executable(kde-osk-kwin-broker
+        src/broker/KWinBrokerMain.cpp
+    )
+    target_link_libraries(kde-osk-kwin-broker
+        PRIVATE
+            Qt6::Core
+    )
+    install(TARGETS kde-osk-kwin-broker
+        BUNDLE DESTINATION .
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kde-osk-kwin-broker.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+    )
 endif()
 
 if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
@@ -316,6 +340,7 @@ install(DIRECTORY qml/
 
 install(FILES
     docs/ARCHITECTURE.md
+    docs/BROKER.md
     docs/DBUS.md
     docs/IMPLEMENTATION_PLAN.md
     docs/LINUX_TEST_PLAN.md

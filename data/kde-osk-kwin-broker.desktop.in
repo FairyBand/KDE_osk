@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=KDE OSK Broker
+Comment=KDE OSK virtual keyboard broker using stock fcitx5
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/kde-osk-kwin-broker
+Icon=input-keyboard-virtual
+Terminal=false
+NoDisplay=true
+Categories=Qt;KDE;Utility;Accessibility;
+X-KDE-Wayland-VirtualKeyboard=true

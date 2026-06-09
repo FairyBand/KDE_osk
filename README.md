@@ -7,8 +7,8 @@ for normal input method work.
 
 ## Goals
 
-- Work well on KDE Plasma Wayland without taking over fcitx5's virtual keyboard
-  setting.
+- Work well on KDE Plasma Wayland while preserving the stock fcitx5 desktop
+  input method experience.
 - Show automatically when a text field gains focus and hide when focus leaves.
 - Suppress automatic display while an external hardware keyboard is connected.
 - Provide separate integration paths for the Plasma desktop, lock screen, and
@@ -25,14 +25,18 @@ events. For that reason, this project is split into trusted integration points:
 - `kde-osk-device-monitor`: libudev-backed hardware keyboard presence detection.
 - `fcitx5-kde-osk-bridge`: planned fcitx5 addon that observes fcitx5 input
   context focus and asks the shell to show or hide without replacing fcitx5.
+- `kde-osk-kwin-broker`: long-term Plasma virtual-keyboard backend that appears
+  in KDE settings, delegates normal desktop input to stock fcitx5, and provides
+  the trusted KWin input-panel route for KDE OSK.
 - `kde-osk-lockscreen`: planned Plasma lock-screen integration.
 - `kde-osk-sddm-inputmethod`: SDDM greeter-only Wayland input-method backend
   that works through the greeter KWin instance without changing the SDDM theme
   or the user's desktop fcitx5 virtual-keyboard backend.
 
-The first implementation milestone builds the shell and device monitor, then
-adds the fcitx5 bridge so desktop-session focus can drive visibility while
-fcitx5 remains the active input method.
+The first implementation milestone builds the shell and device monitor. The
+long-term Plasma path is moving toward the KWin broker so KDE OSK can be
+selected as the virtual-keyboard backend while stock fcitx5 continues to handle
+normal desktop input.
 
 中文需求说明见 [docs/PRODUCT_SPEC.zh-CN.md](docs/PRODUCT_SPEC.zh-CN.md)。
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design details.
@@ -99,9 +103,11 @@ sudo udevadm trigger /dev/uinput
 groups
 ```
 
-The long-term desktop path is still the fcitx5 bridge, because it can commit
-text through the active input context instead of relying on global virtual key
-events.
+The release-grade Plasma path is moving toward `kde-osk-kwin-broker`: a KDE
+virtual-keyboard backend entry that delegates normal desktop input to the
+system's stock fcitx5 process while reserving a KWin input-panel path for KDE
+OSK, lock-screen compatibility, and future secure-input behavior. See
+[docs/BROKER.md](docs/BROKER.md).
 
 On KDE Plasma Wayland, the shell uses LayerShellQt when available. Without it,
 KWin treats the keyboard as a normal Wayland toplevel window: client-side `x/y`

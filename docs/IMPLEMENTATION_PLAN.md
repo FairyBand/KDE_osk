@@ -39,7 +39,28 @@ The exact commit channel should be finalized after the addon scaffold is in
 place. The preferred direction is to keep a D-Bus boundary between the shell and
 the addon so the QML UI remains independent from fcitx5 internals.
 
-## 3. Lock Screen
+## 3. KWin Broker
+
+Implement `kde-osk-kwin-broker` as the long-term Plasma virtual-keyboard entry.
+The broker is selected in KDE settings, starts stock fcitx5 for normal desktop
+input, and later provides the KWin input-panel path for KDE OSK.
+
+Initial done criteria:
+
+- The broker installs a desktop entry with KDE virtual-keyboard metadata.
+- KWin can start the broker as the configured virtual-keyboard backend.
+- The broker delegates to the system `fcitx5` executable without changing normal
+  desktop input behavior.
+- No custom fcitx5 package is required.
+
+Future done criteria:
+
+- A resident broker can delegate KWin's input-method socket to fcitx5 through
+  public fcitx5 mechanisms.
+- KDE OSK appears as a KWin input-panel surface, not a normal desktop window.
+- Password/hidden-text contexts enter secure-input mode.
+
+## 4. Lock Screen
 
 Reuse the keyboard QML component inside the Plasma lock-screen process or a
 dedicated kscreenlocker integration. The lock screen is part of the user's
@@ -53,7 +74,11 @@ Done criteria:
 - Unlock behavior is unchanged with fcitx5 installed.
 - The user's Plasma virtual-keyboard/input-method setting is not changed.
 
-## 4. SDDM
+For the release-grade path, the lock screen should preferably use the broker and
+KWin input-panel route. Direct lock-screen QML integration remains a fallback
+for environments where the broker cannot be used.
+
+## 5. SDDM
 
 Build a greeter-side Wayland input-method backend, not an SDDM theme fork. KDE
 Breeze already exposes a virtual-keyboard button that talks to the greeter KWin
@@ -76,11 +101,12 @@ Done criteria:
 - The installed Breeze SDDM theme is not modified or copied.
 - No user-session `kwinrc` or Plasma virtual-keyboard setting is changed.
 
-## 5. Packaging
+## 6. Packaging
 
 Package as distro-friendly components:
 
 - `kde-osk-shell`
+- `kde-osk-kwin-broker`
 - `fcitx5-kde-osk-bridge`
 - `plasma-kde-osk-lockscreen`
 - `sddm-kde-osk`

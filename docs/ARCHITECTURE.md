@@ -78,18 +78,33 @@ This keeps fcitx5 candidates, layout switching, and compose behavior under
 fcitx5's control. Candidate-row embedding can be added later through a separate
 fcitx5 UI protocol or addon API.
 
+### KWin Virtual-Keyboard Broker
+
+The release-grade Plasma path is a broker selected in KDE's virtual-keyboard
+settings. The broker owns the KWin startup entry while preserving stock fcitx5
+for normal desktop input. This changes the settings entry the user selects, but
+does not require rebuilding or patching fcitx5.
+
+Initial broker behavior is conservative: validate the KWin input-method startup
+environment and `exec` stock `fcitx5`, so normal desktop input remains
+unchanged. Later broker milestones can keep a resident supervisor, delegate the
+KWin Wayland input-method socket to fcitx5 through public fcitx5 mechanisms, and
+show KDE OSK as a KWin input-panel surface when touch keyboard UI is needed.
+
+This broker path is preferred over Plasma lock-screen QML integration for
+long-term distribution use because the lock screen can use the existing KWin
+virtual-keyboard path instead of a theme-specific QML hook.
+
 ### Plasma Lock Screen
 
-The lock screen runs inside the already logged-in Plasma session. That means it
-shares the user's desktop KWin virtual-keyboard backend, which must remain
-fcitx5 for CJK and normal input-method workflows. KDE OSK must not replace the
-desktop virtual keyboard backend to make the lock screen work.
+The lock screen runs inside the already logged-in Plasma session. The long-term
+path is to use the broker-selected KWin virtual-keyboard backend so the lock
+screen can show KDE OSK through the trusted input-panel route while normal
+desktop input remains delegated to stock fcitx5.
 
-The lock-screen integration should therefore be a dedicated kscreenlocker or
-lock-screen QML integration that loads the shared keyboard view in the trusted
-lock-screen process and writes directly to the lock-screen password field. The
-regular desktop D-Bus service is not an appropriate text-entry path for the
-lock screen.
+Direct kscreenlocker or lock-screen QML integration remains a fallback for
+environments where the broker cannot be used. The regular desktop D-Bus service
+is not an appropriate text-entry path for the lock screen.
 
 The shared `KeyboardView.qml` component is intentionally controller-agnostic:
 it emits key and visibility-policy signals instead of directly calling the
@@ -121,17 +136,18 @@ is an SDDM greeter component.
 
 1. Build and install `kde-osk-shell`.
 2. Provide a D-Bus API and hardware keyboard suppression.
-3. Implement the fcitx5 bridge for desktop focus and text commit.
-4. Package a Plasma lock-screen integration that does not replace the user's
-   desktop virtual-keyboard backend.
-5. Package the SDDM greeter input-method backend and SDDM configuration helper.
-6. Add settings UI for layouts, device policy, height, opacity, and haptics.
+3. Add `kde-osk-kwin-broker` and verify that it delegates to stock fcitx5.
+4. Implement the fcitx5 bridge for desktop focus and text commit where the
+   non-broker shell path is still used.
+5. Add the broker resident mode and KWin input-panel KDE OSK surface.
+6. Package the SDDM greeter input-method backend and SDDM configuration helper.
+7. Add settings UI for layouts, device policy, height, opacity, and haptics.
 
 ## Non-Goals For Milestone 1
 
 - No fcitx5 candidate-row embedding.
 - No global key injection from an unprivileged Wayland client.
-- No replacement of Plasma's fcitx5 virtual keyboard setting.
+- No custom fcitx5 package or fcitx5 patching.
 - No SDDM theme fork for the primary greeter integration.
 
 ## References
