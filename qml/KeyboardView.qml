@@ -370,13 +370,6 @@ Rectangle {
             }
 
             ToolButton {
-                text: qsTr("Auto")
-                checkable: true
-                checked: root.autoShowEnabled
-                onClicked: root.autoShowToggled(checked)
-            }
-
-            ToolButton {
                 text: qsTr("Force")
                 checkable: true
                 checked: root.ignoreHardwareKeyboard
