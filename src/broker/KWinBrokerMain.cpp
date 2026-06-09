@@ -11,17 +11,24 @@
 #include <QDBusServiceWatcher>
 #include <QDBusUnixFileDescriptor>
 #include <QDebug>
+#include <QHash>
 #include <QProcessEnvironment>
+#include <QSet>
 #include <QSocketNotifier>
 #include <QStringList>
 #include <QTimer>
+#include <QVector>
+
+#include <cstdint>
 
 #ifdef Q_OS_UNIX
+#include <algorithm>
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <utility>
 #endif
 
 namespace
@@ -30,6 +37,11 @@ constexpr auto FcitxService = "org.fcitx.Fcitx5";
 constexpr auto FcitxControllerPath = "/controller";
 constexpr auto FcitxControllerInterface = "org.fcitx.Fcitx.Controller1";
 constexpr qsizetype MaxProxyBufferBytes = 1024 * 1024;
+constexpr uint32_t WlDisplayObjectId = 1;
+constexpr uint16_t WlDisplayGetRegistryOpcode = 1;
+constexpr uint16_t WlRegistryGlobalOpcode = 0;
+constexpr uint16_t WlRegistryGlobalRemoveOpcode = 1;
+constexpr uint16_t WlRegistryBindOpcode = 0;
 
 int execStockFcitx5(const QString &command, const QStringList &arguments)
 {
@@ -76,6 +88,170 @@ int waylandSocketFd()
 #endif
 }
 
+class WaylandProtocolInspector
+{
+public:
+    enum class Direction {
+        UpstreamToDownstream,
+        DownstreamToUpstream,
+    };
+
+    void inspect(Direction direction, const char *data, qsizetype size)
+    {
+        QByteArray &buffer = direction == Direction::UpstreamToDownstream ? m_upstreamBuffer : m_downstreamBuffer;
+        buffer.append(data, size);
+        parseBufferedMessages(direction, buffer);
+    }
+
+private:
+    static uint32_t readUint32(const char *data)
+    {
+        uint32_t value = 0;
+        memcpy(&value, data, sizeof(value));
+        return value;
+    }
+
+    static bool readWaylandString(const char *payload, qsizetype payloadSize, qsizetype offset, QString &text, qsizetype &nextOffset)
+    {
+        if (offset < 0 || offset + 4 > payloadSize) {
+            return false;
+        }
+
+        const uint32_t length = readUint32(payload + offset);
+        const qsizetype dataOffset = offset + 4;
+        if (dataOffset + length > payloadSize) {
+            return false;
+        }
+
+        const qsizetype textLength = length > 0 ? static_cast<qsizetype>(length - 1) : 0;
+        text = QString::fromUtf8(payload + dataOffset, textLength);
+        nextOffset = dataOffset + ((static_cast<qsizetype>(length) + 3) & ~qsizetype(3));
+        return nextOffset <= payloadSize;
+    }
+
+    static bool isPrivilegedInputInterface(const QString &interfaceName)
+    {
+        return interfaceName == QStringLiteral("zwp_input_method_v1")
+            || interfaceName == QStringLiteral("zwp_input_panel_v1");
+    }
+
+    void parseBufferedMessages(Direction direction, QByteArray &buffer)
+    {
+        while (buffer.size() >= 8) {
+            const char *message = buffer.constData();
+            const uint32_t objectId = readUint32(message);
+            const uint32_t sizeAndOpcode = readUint32(message + 4);
+            const uint16_t opcode = static_cast<uint16_t>(sizeAndOpcode & 0xffff);
+            const uint16_t messageSize = static_cast<uint16_t>(sizeAndOpcode >> 16);
+
+            if (messageSize < 8) {
+                qWarning() << "Invalid Wayland message size from broker proxy:" << messageSize;
+                buffer.clear();
+                return;
+            }
+            if (buffer.size() < messageSize) {
+                return;
+            }
+
+            const char *payload = message + 8;
+            const qsizetype payloadSize = messageSize - 8;
+            if (direction == Direction::UpstreamToDownstream) {
+                parseUpstreamMessage(objectId, opcode, payload, payloadSize);
+            } else {
+                parseDownstreamMessage(objectId, opcode, payload, payloadSize);
+            }
+
+            buffer.remove(0, messageSize);
+        }
+    }
+
+    void parseUpstreamMessage(uint32_t objectId, uint16_t opcode, const char *payload, qsizetype payloadSize)
+    {
+        if (!m_registryObjectIds.contains(objectId)) {
+            return;
+        }
+
+        if (opcode == WlRegistryGlobalOpcode) {
+            parseRegistryGlobal(payload, payloadSize);
+        } else if (opcode == WlRegistryGlobalRemoveOpcode && payloadSize >= 4) {
+            const uint32_t name = readUint32(payload);
+            const QString interfaceName = m_globalInterfaces.take(name);
+            m_globalVersions.remove(name);
+            if (isPrivilegedInputInterface(interfaceName)) {
+                qInfo() << "KWin removed privileged Wayland global" << interfaceName << "name" << name;
+            }
+        }
+    }
+
+    void parseDownstreamMessage(uint32_t objectId, uint16_t opcode, const char *payload, qsizetype payloadSize)
+    {
+        if (objectId == WlDisplayObjectId && opcode == WlDisplayGetRegistryOpcode && payloadSize >= 4) {
+            const uint32_t registryId = readUint32(payload);
+            m_registryObjectIds.insert(registryId);
+            return;
+        }
+
+        if (m_registryObjectIds.contains(objectId) && opcode == WlRegistryBindOpcode) {
+            parseRegistryBind(payload, payloadSize);
+        }
+    }
+
+    void parseRegistryGlobal(const char *payload, qsizetype payloadSize)
+    {
+        if (payloadSize < 8) {
+            return;
+        }
+
+        const uint32_t name = readUint32(payload);
+        QString interfaceName;
+        qsizetype offset = 0;
+        if (!readWaylandString(payload, payloadSize, 4, interfaceName, offset) || offset + 4 > payloadSize) {
+            return;
+        }
+
+        const uint32_t version = readUint32(payload + offset);
+        m_globalInterfaces.insert(name, interfaceName);
+        m_globalVersions.insert(name, version);
+
+        if (isPrivilegedInputInterface(interfaceName)) {
+            qInfo() << "KWin advertised privileged Wayland global" << interfaceName
+                    << "name" << name << "version" << version;
+        }
+    }
+
+    void parseRegistryBind(const char *payload, qsizetype payloadSize)
+    {
+        if (payloadSize < 16) {
+            return;
+        }
+
+        const uint32_t name = readUint32(payload);
+        QString requestedInterface;
+        qsizetype offset = 0;
+        if (!readWaylandString(payload, payloadSize, 4, requestedInterface, offset) || offset + 8 > payloadSize) {
+            return;
+        }
+
+        const uint32_t version = readUint32(payload + offset);
+        const uint32_t newObjectId = readUint32(payload + offset + 4);
+        m_objectInterfaces.insert(newObjectId, requestedInterface);
+
+        if (isPrivilegedInputInterface(requestedInterface)) {
+            qInfo() << "Downstream client bound privileged Wayland global" << requestedInterface
+                    << "name" << name
+                    << "version" << version
+                    << "object" << newObjectId;
+        }
+    }
+
+    QByteArray m_upstreamBuffer;
+    QByteArray m_downstreamBuffer;
+    QSet<uint32_t> m_registryObjectIds;
+    QHash<uint32_t, QString> m_globalInterfaces;
+    QHash<uint32_t, uint32_t> m_globalVersions;
+    QHash<uint32_t, QString> m_objectInterfaces;
+};
+
 class WaylandSocketProxy final : public QObject
 {
 public:
@@ -88,6 +264,8 @@ public:
 
     ~WaylandSocketProxy() override
     {
+        closeFds(m_upstreamToDownstreamFds);
+        closeFds(m_downstreamToUpstreamFds);
         closeFd(m_upstreamFd);
         closeFd(m_downstreamFd);
     }
@@ -111,16 +289,26 @@ public:
         m_downstreamWriter->setEnabled(false);
 
         connect(m_upstreamReader, &QSocketNotifier::activated, this, [this]() {
-            readAvailable(m_upstreamFd, m_upstreamToDownstream, m_downstreamWriter, m_upstreamReader);
+            readAvailable(m_upstreamFd,
+                          WaylandProtocolInspector::Direction::UpstreamToDownstream,
+                          m_upstreamToDownstream,
+                          m_upstreamToDownstreamFds,
+                          m_downstreamWriter,
+                          m_upstreamReader);
         });
         connect(m_downstreamReader, &QSocketNotifier::activated, this, [this]() {
-            readAvailable(m_downstreamFd, m_downstreamToUpstream, m_upstreamWriter, m_downstreamReader);
+            readAvailable(m_downstreamFd,
+                          WaylandProtocolInspector::Direction::DownstreamToUpstream,
+                          m_downstreamToUpstream,
+                          m_downstreamToUpstreamFds,
+                          m_upstreamWriter,
+                          m_downstreamReader);
         });
         connect(m_upstreamWriter, &QSocketNotifier::activated, this, [this]() {
-            writeAvailable(m_upstreamFd, m_downstreamToUpstream, m_upstreamWriter, m_downstreamReader);
+            writeAvailable(m_upstreamFd, m_downstreamToUpstream, m_downstreamToUpstreamFds, m_upstreamWriter, m_downstreamReader);
         });
         connect(m_downstreamWriter, &QSocketNotifier::activated, this, [this]() {
-            writeAvailable(m_downstreamFd, m_upstreamToDownstream, m_downstreamWriter, m_upstreamReader);
+            writeAvailable(m_downstreamFd, m_upstreamToDownstream, m_upstreamToDownstreamFds, m_downstreamWriter, m_upstreamReader);
         });
 
         qInfo() << "Started transparent KWin Wayland socket proxy for fcitx5 delegation.";
@@ -139,6 +327,18 @@ private:
 #else
         Q_UNUSED(fd)
 #endif
+    }
+
+    static void closeFds(QVector<int> &fds)
+    {
+#ifdef Q_OS_UNIX
+        for (int fd : std::as_const(fds)) {
+            if (fd >= 0) {
+                close(fd);
+            }
+        }
+#endif
+        fds.clear();
     }
 
     static bool setNonBlocking(int fd)
@@ -160,11 +360,18 @@ private:
 #endif
     }
 
-    void readAvailable(int fd, QByteArray &buffer, QSocketNotifier *writer, QSocketNotifier *reader)
+    void readAvailable(int fd,
+                       WaylandProtocolInspector::Direction direction,
+                       QByteArray &buffer,
+                       QVector<int> &fds,
+                       QSocketNotifier *writer,
+                       QSocketNotifier *reader)
     {
 #ifndef Q_OS_UNIX
         Q_UNUSED(fd)
+        Q_UNUSED(direction)
         Q_UNUSED(buffer)
+        Q_UNUSED(fds)
         Q_UNUSED(writer)
         Q_UNUSED(reader)
 #else
@@ -172,9 +379,23 @@ private:
 
         char chunk[8192];
         while (buffer.size() < MaxProxyBufferBytes) {
-            const ssize_t bytesRead = read(fd, chunk, sizeof(chunk));
+            char control[CMSG_SPACE(sizeof(int) * 32)];
+            struct iovec iov;
+            iov.iov_base = chunk;
+            iov.iov_len = sizeof(chunk);
+
+            struct msghdr message;
+            memset(&message, 0, sizeof(message));
+            message.msg_iov = &iov;
+            message.msg_iovlen = 1;
+            message.msg_control = control;
+            message.msg_controllen = sizeof(control);
+
+            const ssize_t bytesRead = recvmsg(fd, &message, MSG_CMSG_CLOEXEC);
             if (bytesRead > 0) {
                 buffer.append(chunk, bytesRead);
+                m_protocolInspector.inspect(direction, chunk, bytesRead);
+                appendReceivedFds(message, fds);
                 continue;
             }
             if (bytesRead == 0) {
@@ -197,18 +418,42 @@ private:
 #endif
     }
 
-    void writeAvailable(int fd, QByteArray &buffer, QSocketNotifier *writer, QSocketNotifier *readerToReenable)
+    static void appendReceivedFds(const struct msghdr &message, QVector<int> &fds)
+    {
+#ifdef Q_OS_UNIX
+        for (struct cmsghdr *controlMessage = CMSG_FIRSTHDR(const_cast<struct msghdr *>(&message));
+             controlMessage != nullptr;
+             controlMessage = CMSG_NXTHDR(const_cast<struct msghdr *>(&message), controlMessage)) {
+            if (controlMessage->cmsg_level != SOL_SOCKET || controlMessage->cmsg_type != SCM_RIGHTS) {
+                continue;
+            }
+
+            const auto byteCount = static_cast<int>(controlMessage->cmsg_len - CMSG_LEN(0));
+            const int fdCount = byteCount / static_cast<int>(sizeof(int));
+            const int *receivedFds = reinterpret_cast<const int *>(CMSG_DATA(controlMessage));
+            for (int index = 0; index < fdCount; ++index) {
+                fds.push_back(receivedFds[index]);
+            }
+        }
+#else
+        Q_UNUSED(message)
+        Q_UNUSED(fds)
+#endif
+    }
+
+    void writeAvailable(int fd, QByteArray &buffer, QVector<int> &fds, QSocketNotifier *writer, QSocketNotifier *readerToReenable)
     {
 #ifndef Q_OS_UNIX
         Q_UNUSED(fd)
         Q_UNUSED(buffer)
+        Q_UNUSED(fds)
         Q_UNUSED(writer)
         Q_UNUSED(readerToReenable)
 #else
         writer->setEnabled(false);
 
         while (!buffer.isEmpty()) {
-            const ssize_t bytesWritten = write(fd, buffer.constData(), static_cast<size_t>(buffer.size()));
+            const ssize_t bytesWritten = writeProxyMessage(fd, buffer, fds);
             if (bytesWritten > 0) {
                 buffer.remove(0, bytesWritten);
                 continue;
@@ -232,6 +477,51 @@ private:
 #endif
     }
 
+    static ssize_t writeProxyMessage(int fd, const QByteArray &buffer, QVector<int> &fds)
+    {
+#ifndef Q_OS_UNIX
+        Q_UNUSED(fd)
+        Q_UNUSED(buffer)
+        Q_UNUSED(fds)
+        return -1;
+#else
+        if (fds.isEmpty()) {
+            return write(fd, buffer.constData(), static_cast<size_t>(buffer.size()));
+        }
+
+        constexpr int MaxFdsPerMessage = 32;
+        const int fdCount = static_cast<int>(std::min<qsizetype>(fds.size(), MaxFdsPerMessage));
+        char control[CMSG_SPACE(sizeof(int) * MaxFdsPerMessage)];
+        memset(control, 0, sizeof(control));
+
+        struct iovec iov;
+        iov.iov_base = const_cast<char *>(buffer.constData());
+        iov.iov_len = static_cast<size_t>(buffer.size());
+
+        struct msghdr message;
+        memset(&message, 0, sizeof(message));
+        message.msg_iov = &iov;
+        message.msg_iovlen = 1;
+        message.msg_control = control;
+        message.msg_controllen = CMSG_SPACE(sizeof(int) * fdCount);
+
+        struct cmsghdr *controlMessage = CMSG_FIRSTHDR(&message);
+        controlMessage->cmsg_level = SOL_SOCKET;
+        controlMessage->cmsg_type = SCM_RIGHTS;
+        controlMessage->cmsg_len = CMSG_LEN(sizeof(int) * fdCount);
+        memcpy(CMSG_DATA(controlMessage), fds.constData(), sizeof(int) * fdCount);
+
+        const ssize_t bytesWritten = sendmsg(fd, &message, MSG_NOSIGNAL);
+        if (bytesWritten > 0) {
+            for (int index = 0; index < fdCount; ++index) {
+                close(fds[index]);
+            }
+            fds.erase(fds.begin(), fds.begin() + fdCount);
+        }
+        return bytesWritten;
+#endif
+    }
+
     void closeProxy(const QString &reason)
     {
         qWarning() << reason;
@@ -242,6 +532,9 @@ private:
     int m_downstreamFd = -1;
     QByteArray m_upstreamToDownstream;
     QByteArray m_downstreamToUpstream;
+    QVector<int> m_upstreamToDownstreamFds;
+    QVector<int> m_downstreamToUpstreamFds;
+    WaylandProtocolInspector m_protocolInspector;
     QSocketNotifier *m_upstreamReader = nullptr;
     QSocketNotifier *m_downstreamReader = nullptr;
     QSocketNotifier *m_upstreamWriter = nullptr;
