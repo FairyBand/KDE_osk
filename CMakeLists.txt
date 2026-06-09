@@ -235,6 +235,7 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
     )
 
     qt6_generate_wayland_protocol_client_sources(kde-osk-sddm-inputmethod
+        NO_INCLUDE_CORE_ONLY
         FILES
             ${KDE_OSK_INPUT_METHOD_PROTOCOL}
     )
