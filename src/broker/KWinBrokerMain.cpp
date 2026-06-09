@@ -103,6 +103,37 @@ public:
         parseBufferedMessages(direction, buffer);
     }
 
+    void filterUpstreamToDownstream(const char *data, qsizetype size, QByteArray &output)
+    {
+        m_upstreamBuffer.append(data, size);
+
+        while (m_upstreamBuffer.size() >= 8) {
+            const char *message = m_upstreamBuffer.constData();
+            const uint32_t objectId = readUint32(message);
+            const uint32_t sizeAndOpcode = readUint32(message + 4);
+            const uint16_t opcode = static_cast<uint16_t>(sizeAndOpcode & 0xffff);
+            const uint16_t messageSize = static_cast<uint16_t>(sizeAndOpcode >> 16);
+
+            if (messageSize < 8) {
+                qWarning() << "Invalid Wayland message size from broker proxy:" << messageSize;
+                m_upstreamBuffer.clear();
+                return;
+            }
+            if (m_upstreamBuffer.size() < messageSize) {
+                return;
+            }
+
+            const char *payload = message + 8;
+            const qsizetype payloadSize = messageSize - 8;
+            parseUpstreamMessage(objectId, opcode, payload, payloadSize);
+            if (!shouldReserveForPanelBranch(objectId, opcode, payload, payloadSize)) {
+                output.append(message, messageSize);
+            }
+
+            m_upstreamBuffer.remove(0, messageSize);
+        }
+    }
+
 private:
     static uint32_t readUint32(const char *data)
     {
@@ -198,18 +229,13 @@ private:
 
     void parseRegistryGlobal(const char *payload, qsizetype payloadSize)
     {
-        if (payloadSize < 8) {
-            return;
-        }
-
-        const uint32_t name = readUint32(payload);
+        uint32_t name = 0;
         QString interfaceName;
-        qsizetype offset = 0;
-        if (!readWaylandString(payload, payloadSize, 4, interfaceName, offset) || offset + 4 > payloadSize) {
+        uint32_t version = 0;
+        if (!parseRegistryGlobalPayload(payload, payloadSize, name, interfaceName, version)) {
             return;
         }
 
-        const uint32_t version = readUint32(payload + offset);
         m_globalInterfaces.insert(name, interfaceName);
         m_globalVersions.insert(name, version);
 
@@ -217,6 +243,59 @@ private:
             qInfo() << "KWin advertised privileged Wayland global" << interfaceName
                     << "name" << name << "version" << version;
         }
+    }
+
+    static bool parseRegistryGlobalPayload(const char *payload, qsizetype payloadSize, uint32_t &name, QString &interfaceName, uint32_t &version)
+    {
+        if (payloadSize < 8) {
+            return false;
+        }
+
+        name = readUint32(payload);
+        qsizetype offset = 0;
+        if (!readWaylandString(payload, payloadSize, 4, interfaceName, offset) || offset + 4 > payloadSize) {
+            return false;
+        }
+
+        version = readUint32(payload + offset);
+        return true;
+    }
+
+    bool shouldReserveForPanelBranch(uint32_t objectId, uint16_t opcode, const char *payload, qsizetype payloadSize)
+    {
+        if (!m_registryObjectIds.contains(objectId)) {
+            return false;
+        }
+
+        if (opcode == WlRegistryGlobalOpcode) {
+            uint32_t name = 0;
+            QString interfaceName;
+            uint32_t version = 0;
+            if (!parseRegistryGlobalPayload(payload, payloadSize, name, interfaceName, version)) {
+                return false;
+            }
+            if (interfaceName != QStringLiteral("zwp_input_panel_v1")) {
+                return false;
+            }
+
+            m_reservedPanelGlobalNames.insert(name);
+            qInfo() << "Reserving Wayland input-panel global for KDE OSK branch; hiding from fcitx5"
+                    << "name" << name << "version" << version;
+            return true;
+        }
+
+        if (opcode == WlRegistryGlobalRemoveOpcode && payloadSize >= 4) {
+            const uint32_t name = readUint32(payload);
+            if (!m_reservedPanelGlobalNames.remove(name)) {
+                return false;
+            }
+
+            qInfo() << "Hiding removal of reserved Wayland input-panel global from fcitx5"
+                    << "name" << name;
+            return true;
+        }
+
+        return false;
     }
 
     void parseRegistryBind(const char *payload, qsizetype payloadSize)
@@ -250,6 +329,7 @@ private:
     QHash<uint32_t, QString> m_globalInterfaces;
     QHash<uint32_t, uint32_t> m_globalVersions;
     QHash<uint32_t, QString> m_objectInterfaces;
+    QSet<uint32_t> m_reservedPanelGlobalNames;
 };
 
 class WaylandSocketProxy final : public QObject
@@ -393,8 +473,12 @@ private:
 
             const ssize_t bytesRead = recvmsg(fd, &message, MSG_CMSG_CLOEXEC);
             if (bytesRead > 0) {
-                buffer.append(chunk, bytesRead);
-                m_protocolInspector.inspect(direction, chunk, bytesRead);
+                if (direction == WaylandProtocolInspector::Direction::UpstreamToDownstream) {
+                    m_protocolInspector.filterUpstreamToDownstream(chunk, bytesRead, buffer);
+                } else {
+                    buffer.append(chunk, bytesRead);
+                    m_protocolInspector.inspect(direction, chunk, bytesRead);
+                }
                 appendReceivedFds(message, fds);
                 continue;
             }

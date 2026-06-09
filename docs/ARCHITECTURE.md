@@ -88,11 +88,12 @@ does not require rebuilding or patching fcitx5.
 Initial broker behavior is conservative: validate the KWin input-method startup
 environment, start or wait for stock `fcitx5`, and delegate a broker-owned
 Wayland proxy socket to fcitx5 through fcitx5's public D-Bus controller API. The
-proxy currently forwards bytes and Wayland file descriptors transparently while
-inspecting registry globals and binds, so fcitx5 behavior should remain
-unchanged while the broker stays resident in the Wayland data path. Later
-milestones can split the proxied protocol stream so KDE OSK can own the trusted
-input-panel branch when touch keyboard UI is needed.
+proxy currently forwards bytes and Wayland file descriptors while inspecting
+registry globals and binds. The fcitx5 branch keeps the input-method path, while
+the broker filters `zwp_input_panel_v1` out of fcitx5's registry view and
+reserves it for the KDE OSK panel branch. Later milestones can proxy that panel
+branch so KDE OSK can own the trusted input-panel surface when touch keyboard UI
+is needed.
 
 This broker path is preferred over Plasma lock-screen QML integration for
 long-term distribution use because the lock screen can use the existing KWin

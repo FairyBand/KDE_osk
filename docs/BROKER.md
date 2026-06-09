@@ -30,11 +30,10 @@ The first broker milestone is intentionally conservative: when KWin starts the
 broker, the broker validates that it was launched in a Wayland input-method
 environment, starts or waits for stock `fcitx5`, and delegates a broker-owned
 Wayland proxy socket to fcitx5 through fcitx5's public D-Bus controller API.
-At this stage the proxy forwards bytes and Wayland file descriptors
-transparently. It also inspects `wl_registry` globals and binds so the broker
-can identify `zwp_input_method_v1` and `zwp_input_panel_v1` before later
-protocol-level splitting gives the input-method branch to fcitx5 while keeping
-the trusted input-panel branch for KDE OSK.
+At this stage the proxy forwards bytes and Wayland file descriptors while
+inspecting `wl_registry` globals and binds. The fcitx5 branch still receives the
+normal input-method path, but `zwp_input_panel_v1` is filtered out of fcitx5's
+registry view and reserved for the future KDE OSK panel branch.
 
 The old `exec` delegation path is kept as an explicit compatibility mode with
 `--exec-fcitx5`.
@@ -76,10 +75,12 @@ input to fcitx5 while selected.
 4. Add `kde-osk-input-panel` for direct real-machine KWin input-panel testing.
 5. Put the resident broker in the Wayland socket data path with a transparent
    proxy that preserves stock fcitx5 behavior, including Wayland fd passing.
-6. Upgrade the proxy into a protocol splitter for the fcitx5 input-method branch
-   and the KDE OSK input-panel branch.
-7. Connect a KDE OSK input-panel process to the resident broker's visibility and
+6. Filter the input-panel global out of the fcitx5 branch and reserve it for
+   KDE OSK.
+7. Add the KDE OSK input-panel branch and proxy its surface traffic through the
+   broker.
+8. Connect a KDE OSK input-panel process to the resident broker's visibility and
    hardware-keyboard policy.
-8. Add secure-input mode based on input-method content type.
-9. Keep the existing SDDM greeter backend separate, because SDDM runs before the
+9. Add secure-input mode based on input-method content type.
+10. Keep the existing SDDM greeter backend separate, because SDDM runs before the
    user's fcitx5 session exists.
