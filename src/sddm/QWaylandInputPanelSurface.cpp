@@ -11,12 +11,7 @@ QWaylandInputPanelSurface::QWaylandInputPanelSurface(struct ::zwp_input_panel_su
     window->applyConfigureWhenPossible();
 }
 
-QWaylandInputPanelSurface::~QWaylandInputPanelSurface()
-{
-    if (object() != nullptr) {
-        destroy();
-    }
-}
+QWaylandInputPanelSurface::~QWaylandInputPanelSurface() = default;
 
 void QWaylandInputPanelSurface::applyConfigure()
 {
