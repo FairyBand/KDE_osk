@@ -30,6 +30,7 @@ Rectangle {
     property string symbolLayer: "letters"
     property string windowMode: "dockBottom"
     property bool showToolbar: true
+    property bool showWindowModeControl: true
     property bool draggingToolbar: false
 
     signal autoShowToggled(bool enabled)
@@ -355,7 +356,8 @@ Rectangle {
             }
 
             ComboBox {
-                Layout.preferredWidth: 126
+                visible: root.showWindowModeControl
+                Layout.preferredWidth: visible ? 126 : 0
                 textRole: "label"
                 valueRole: "value"
                 model: [
