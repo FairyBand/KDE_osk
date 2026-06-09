@@ -2,6 +2,8 @@
 
 #include "HardwareKeyboardMonitor.h"
 
+#include <QStringView>
+
 namespace
 {
 constexpr uint XkbKeyBackspace = 0xff08;
@@ -9,6 +11,8 @@ constexpr uint XkbKeyTab = 0xff09;
 constexpr uint XkbKeyReturn = 0xff0d;
 constexpr uint XkbKeyEscape = 0xff1b;
 constexpr uint XkbKeyHome = 0xff50;
+constexpr uint XkbKeyInsert = 0xff63;
+constexpr uint XkbKeyMenu = 0xff67;
 constexpr uint XkbKeyLeft = 0xff51;
 constexpr uint XkbKeyUp = 0xff52;
 constexpr uint XkbKeyRight = 0xff53;
@@ -16,6 +20,7 @@ constexpr uint XkbKeyDown = 0xff54;
 constexpr uint XkbKeyPageUp = 0xff55;
 constexpr uint XkbKeyPageDown = 0xff56;
 constexpr uint XkbKeyEnd = 0xff57;
+constexpr uint XkbKeyF1 = 0xffbe;
 constexpr uint XkbKeyDelete = 0xffff;
 }
 
@@ -80,6 +85,16 @@ bool SddmInputMethodController::hardwareKeyboardPresent() const
     return m_hardwareKeyboardMonitor->hardwareKeyboardPresent();
 }
 
+bool SddmInputMethodController::autoShowEnabled() const
+{
+    return m_autoShowEnabled;
+}
+
+bool SddmInputMethodController::ignoreHardwareKeyboard() const
+{
+    return m_ignoreHardwareKeyboard;
+}
+
 bool SddmInputMethodController::capsLockActive() const
 {
     return m_capsLockActive;
@@ -92,6 +107,28 @@ void SddmInputMethodController::hideKeyboard()
     }
     m_visible = false;
     emit visibleChanged(m_visible);
+}
+
+void SddmInputMethodController::setAutoShowEnabled(bool enabled)
+{
+    if (m_autoShowEnabled == enabled) {
+        return;
+    }
+
+    m_autoShowEnabled = enabled;
+    emit autoShowEnabledChanged(m_autoShowEnabled);
+    updateState();
+}
+
+void SddmInputMethodController::setIgnoreHardwareKeyboard(bool ignore)
+{
+    if (m_ignoreHardwareKeyboard == ignore) {
+        return;
+    }
+
+    m_ignoreHardwareKeyboard = ignore;
+    emit ignoreHardwareKeyboardChanged(m_ignoreHardwareKeyboard);
+    updateState();
 }
 
 void SddmInputMethodController::keyPressed(const QString &keyId, bool shift, bool ctrl, bool alt, bool meta)
@@ -128,7 +165,7 @@ void SddmInputMethodController::keyPressed(const QString &keyId, bool shift, boo
     }
 
     if (ctrl || alt || meta) {
-        sendNavigationKey(keyId);
+        sendSpecialKey(keyId);
         return;
     }
 
@@ -138,7 +175,7 @@ void SddmInputMethodController::keyPressed(const QString &keyId, bool shift, boo
         return;
     }
 
-    sendNavigationKey(keyId);
+    sendSpecialKey(keyId);
 }
 
 void SddmInputMethodController::setModifierActive(const QString &keyId, bool active)
@@ -161,34 +198,61 @@ QString SddmInputMethodController::textForKey(const QString &keyId, bool shift) 
     return keyId.size() == 1 ? keyId : QString();
 }
 
-void SddmInputMethodController::sendNavigationKey(const QString &keyId)
+bool SddmInputMethodController::sendSpecialKey(const QString &keyId)
 {
     if (keyId == QStringLiteral("Left")) {
         m_inputMethod.sendKeysym(XkbKeyLeft);
+        return true;
     } else if (keyId == QStringLiteral("Right")) {
         m_inputMethod.sendKeysym(XkbKeyRight);
+        return true;
     } else if (keyId == QStringLiteral("Up")) {
         m_inputMethod.sendKeysym(XkbKeyUp);
+        return true;
     } else if (keyId == QStringLiteral("Down")) {
         m_inputMethod.sendKeysym(XkbKeyDown);
+        return true;
     } else if (keyId == QStringLiteral("Home")) {
         m_inputMethod.sendKeysym(XkbKeyHome);
+        return true;
     } else if (keyId == QStringLiteral("End")) {
         m_inputMethod.sendKeysym(XkbKeyEnd);
+        return true;
+    } else if (keyId == QStringLiteral("Insert") || keyId == QStringLiteral("Ins")) {
+        m_inputMethod.sendKeysym(XkbKeyInsert);
+        return true;
+    } else if (keyId == QStringLiteral("Menu")) {
+        m_inputMethod.sendKeysym(XkbKeyMenu);
+        return true;
     } else if (keyId == QStringLiteral("PageUp") || keyId == QStringLiteral("PgUp")) {
         m_inputMethod.sendKeysym(XkbKeyPageUp);
+        return true;
     } else if (keyId == QStringLiteral("PageDown") || keyId == QStringLiteral("PgDn")) {
         m_inputMethod.sendKeysym(XkbKeyPageDown);
+        return true;
     } else if (keyId == QStringLiteral("Delete") || keyId == QStringLiteral("Del")) {
         m_inputMethod.sendKeysym(XkbKeyDelete);
+        return true;
     } else if (keyId == QStringLiteral("Backspace")) {
         m_inputMethod.sendKeysym(XkbKeyBackspace);
+        return true;
+    } else if (keyId.startsWith(QLatin1Char('F'))) {
+        bool ok = false;
+        const int functionKey = QStringView(keyId).mid(1).toInt(&ok);
+        if (ok && functionKey >= 1 && functionKey <= 12) {
+            m_inputMethod.sendKeysym(XkbKeyF1 + static_cast<uint>(functionKey - 1));
+            return true;
+        }
     }
+
+    return false;
 }
 
 void SddmInputMethodController::updateState()
 {
-    const bool nextVisible = m_inputMethod.contextActive() && !m_hardwareKeyboardMonitor->hardwareKeyboardPresent();
+    const bool nextVisible = m_autoShowEnabled
+        && m_inputMethod.contextActive()
+        && (m_ignoreHardwareKeyboard || !m_hardwareKeyboardMonitor->hardwareKeyboardPresent());
     if (m_visible != nextVisible) {
         m_visible = nextVisible;
         emit visibleChanged(m_visible);

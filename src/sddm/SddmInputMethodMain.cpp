@@ -1,6 +1,7 @@
 #include "HardwareKeyboardMonitor.h"
 #include "InputPanelIntegration.h"
 #include "SddmInputMethodController.h"
+#include "ShellWindowAdapter.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -18,9 +19,11 @@ int main(int argc, char *argv[])
 
     HardwareKeyboardMonitor hardwareKeyboardMonitor;
     SddmInputMethodController controller(&hardwareKeyboardMonitor);
+    ShellWindowAdapter windowAdapter;
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("sddmInputMethodController"), &controller);
+    engine.rootContext()->setContextProperty(QStringLiteral("sddmWindowAdapter"), &windowAdapter);
 
     QObject::connect(
         &engine,

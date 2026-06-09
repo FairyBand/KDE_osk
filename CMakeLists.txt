@@ -211,6 +211,8 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
     qt_add_executable(kde-osk-sddm-inputmethod
         src/HardwareKeyboardMonitor.cpp
         src/HardwareKeyboardMonitor.h
+        src/ShellWindowAdapter.cpp
+        src/ShellWindowAdapter.h
         src/sddm/InputPanelIntegration.cpp
         src/sddm/InputPanelIntegration.h
         src/sddm/InputPanelRole.h
