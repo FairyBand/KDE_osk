@@ -34,6 +34,11 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD)
     if(ECM_FOUND)
         list(APPEND CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
         find_package(WaylandProtocols 1.19 QUIET)
+        find_package(WaylandScanner QUIET)
+    endif()
+    find_package(Qt6WaylandScannerTools 6.4 QUIET CONFIG)
+    if(Qt6WaylandClient_DIR AND EXISTS "${Qt6WaylandClient_DIR}/Qt6WaylandClientMacros.cmake")
+        include("${Qt6WaylandClient_DIR}/Qt6WaylandClientMacros.cmake")
     endif()
     if(TARGET Qt6::WaylandClientPrivate)
         get_target_property(KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_INCLUDE_DIRS
@@ -47,6 +52,34 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD)
             find_path(KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT
                 NAMES QtWaylandClient/private/qwaylandwindow_p.h)
         endif()
+    endif()
+endif()
+
+set(KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS)
+if(KDE_OSK_BUILD_SDDM_INPUTMETHOD)
+    if(NOT TARGET Qt6::WaylandClient)
+        list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "Qt6::WaylandClient")
+    endif()
+    if(NOT TARGET Qt6::WaylandClientPrivate)
+        list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "Qt6::WaylandClientPrivate")
+    endif()
+    if(NOT TARGET Qt6::GuiPrivate)
+        list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "Qt6::GuiPrivate")
+    endif()
+    if(NOT KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT)
+        list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "QtWaylandClient private headers")
+    endif()
+    if(NOT WaylandProtocols_FOUND)
+        list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "wayland-protocols")
+    endif()
+    if(NOT WaylandScanner_FOUND)
+        list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "wayland-scanner")
+    endif()
+    if(NOT TARGET Qt6::qtwaylandscanner)
+        list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "qtwaylandscanner")
+    endif()
+    if(NOT COMMAND qt6_generate_wayland_protocol_client_sources)
+        list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "Qt Wayland client protocol CMake macros")
     endif()
 endif()
 
@@ -136,12 +169,7 @@ elseif(KDE_OSK_BUILD_FCITX5_BRIDGE)
 endif()
 
 if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
-    AND TARGET Qt6::WaylandClient
-    AND TARGET Qt6::WaylandClientPrivate
-    AND TARGET Qt6::GuiPrivate
-    AND KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT
-    AND WaylandProtocols_FOUND
-    AND COMMAND qt_generate_wayland_protocol_client_sources)
+    AND NOT KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS)
     qt_add_executable(kde-osk-sddm-inputmethod
         src/HardwareKeyboardMonitor.cpp
         src/HardwareKeyboardMonitor.h
@@ -168,7 +196,7 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
             qml/KeyButton.qml
     )
 
-    qt_generate_wayland_protocol_client_sources(kde-osk-sddm-inputmethod
+    qt6_generate_wayland_protocol_client_sources(kde-osk-sddm-inputmethod
         FILES
             ${WaylandProtocols_DATADIR}/unstable/input-method/input-method-unstable-v1.xml
     )
@@ -186,14 +214,24 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
             PkgConfig::LIBUDEV
     )
 
-    target_include_directories(kde-osk-sddm-inputmethod PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(kde-osk-sddm-inputmethod
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_BINARY_DIR}
+    )
 
     install(TARGETS kde-osk-sddm-inputmethod
         BUNDLE DESTINATION .
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
+    set(KDE_OSK_SDDM_INPUTMETHOD_BUILT TRUE)
 elseif(KDE_OSK_BUILD_SDDM_INPUTMETHOD)
-    message(WARNING "Qt Wayland client private headers, wayland-protocols, or Qt Wayland CMake code generation support were not found. The SDDM input-method backend will not be built.")
+    string(REPLACE ";" ", " KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS_TEXT "${KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS}")
+    message(WARNING "The SDDM input-method backend will not be built. Missing: ${KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS_TEXT}")
+    add_custom_target(kde-osk-sddm-inputmethod
+        COMMAND ${CMAKE_COMMAND} -E echo "Cannot build kde-osk-sddm-inputmethod. Missing: ${KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS_TEXT}"
+        COMMAND ${CMAKE_COMMAND} -E false
+    )
 endif()
 
 install(TARGETS kde-osk-shell
@@ -221,7 +259,7 @@ install(FILES data/70-kde-osk-uinput.rules
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/udev/rules.d
 )
 
-if(TARGET kde-osk-sddm-inputmethod)
+if(KDE_OSK_SDDM_INPUTMETHOD_BUILT)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kde-osk-sddm-wayland.conf
         DESTINATION ${CMAKE_INSTALL_DATADIR}/kde-osk/sddm
     )
