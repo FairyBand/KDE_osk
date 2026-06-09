@@ -34,6 +34,12 @@ input-method socket to fcitx5 through fcitx5's public D-Bus controller API.
 The old `exec` delegation path is kept as an explicit compatibility mode with
 `--exec-fcitx5`.
 
+For real-machine panel testing, `kde-osk-input-panel` is provided as a direct
+KWin input-method/input-panel backend. It reuses the same Wayland input-method
+implementation as the SDDM backend and shows the shared KDE OSK keyboard QML.
+This target is a test and fallback backend; it does not delegate normal desktop
+input to fcitx5 while selected.
+
 ## Responsibilities
 
 - Install a virtual-keyboard desktop entry for KDE Plasma.
@@ -60,10 +66,11 @@ The old `exec` delegation path is kept as an explicit compatibility mode with
 2. Verify that selecting "KDE OSK Broker" in Plasma starts stock fcitx5,
    delegates KWin's socket through `ReopenWaylandConnectionSocket`, and keeps
    desktop input behavior unchanged.
-3. Refactor the existing SDDM input-method/input-panel code into reusable broker
+3. Refactor the existing SDDM input-method/input-panel code into reusable
    building blocks.
-4. Add the KDE OSK input-panel process and connect it to the broker's visibility
-   and hardware-keyboard policy.
-5. Add secure-input mode based on input-method content type.
-6. Keep the existing SDDM greeter backend separate, because SDDM runs before the
+4. Add `kde-osk-input-panel` for direct real-machine KWin input-panel testing.
+5. Connect a KDE OSK input-panel process to the resident broker's visibility and
+   hardware-keyboard policy.
+6. Add secure-input mode based on input-method content type.
+7. Keep the existing SDDM greeter backend separate, because SDDM runs before the
    user's fcitx5 session exists.

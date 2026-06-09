@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=KDE OSK Input Panel
+Comment=Direct KDE OSK input-panel backend for KWin testing
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/kde-osk-input-panel
+Icon=input-keyboard-virtual
+Terminal=false
+NoDisplay=true
+Categories=Qt;KDE;Utility;Accessibility;
+X-KDE-Wayland-VirtualKeyboard=true

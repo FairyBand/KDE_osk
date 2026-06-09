@@ -28,6 +28,8 @@ events. For that reason, this project is split into trusted integration points:
 - `kde-osk-kwin-broker`: long-term Plasma virtual-keyboard backend that appears
   in KDE settings, delegates normal desktop input to stock fcitx5, and provides
   the trusted KWin input-panel route for KDE OSK.
+- `kde-osk-input-panel`: direct KWin Wayland input-panel backend for testing the
+  KDE OSK panel surface with the same keyboard UI used by the SDDM path.
 - `kde-osk-lockscreen`: planned Plasma lock-screen integration.
 - `kde-osk-sddm-inputmethod`: SDDM greeter-only Wayland input-method backend
   that works through the greeter KWin instance without changing the SDDM theme
@@ -108,6 +110,13 @@ virtual-keyboard backend entry that delegates normal desktop input to the
 system's stock fcitx5 process while reserving a KWin input-panel path for KDE
 OSK, lock-screen compatibility, and future secure-input behavior. See
 [docs/BROKER.md](docs/BROKER.md).
+
+For real-machine input-panel testing, this tree also builds
+`kde-osk-input-panel`, a direct KWin virtual-keyboard backend that reuses the
+SDDM input-method/input-panel implementation with the generic KDE OSK title and
+QML entry point. It is useful for validating the panel surface, appearance,
+hardware-keyboard suppression, and password-field behavior before the resident
+broker grows full panel multiplexing.
 
 On KDE Plasma Wayland, the shell uses LayerShellQt when available. Without it,
 KWin treats the keyboard as a normal Wayland toplevel window: client-side `x/y`

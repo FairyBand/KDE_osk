@@ -21,6 +21,7 @@ pkg_check_modules(LIBUDEV REQUIRED IMPORTED_TARGET libudev)
 
 option(KDE_OSK_BUILD_FCITX5_BRIDGE "Build the optional fcitx5 desktop focus bridge" ON)
 option(KDE_OSK_BUILD_KWIN_BROKER "Build the KDE Plasma virtual-keyboard broker" ON)
+option(KDE_OSK_BUILD_INPUT_PANEL "Build the generic KWin Wayland input-panel backend" ON)
 option(KDE_OSK_BUILD_SDDM_INPUTMETHOD "Build the SDDM greeter Wayland input-method backend" ON)
 option(KDE_OSK_USE_LAYER_SHELL "Use LayerShellQt for Wayland keyboard window placement" ON)
 if(KDE_OSK_USE_LAYER_SHELL)
@@ -30,7 +31,7 @@ if(KDE_OSK_BUILD_FCITX5_BRIDGE)
     find_package(Fcitx5Core QUIET)
     find_package(Fcitx5Utils QUIET)
 endif()
-if(KDE_OSK_BUILD_SDDM_INPUTMETHOD)
+if(KDE_OSK_BUILD_SDDM_INPUTMETHOD OR KDE_OSK_BUILD_INPUT_PANEL)
     find_package(ECM QUIET NO_MODULE)
     if(ECM_FOUND)
         list(APPEND CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
@@ -95,7 +96,7 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD)
 endif()
 
 set(KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS)
-if(KDE_OSK_BUILD_SDDM_INPUTMETHOD)
+if(KDE_OSK_BUILD_SDDM_INPUTMETHOD OR KDE_OSK_BUILD_INPUT_PANEL)
     if(NOT TARGET Qt6::WaylandClient)
         list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "Qt6::WaylandClient")
     endif()
@@ -139,6 +140,12 @@ configure_file(
 configure_file(
     data/kde-osk-kwin-broker.desktop.in
     ${CMAKE_CURRENT_BINARY_DIR}/kde-osk-kwin-broker.desktop
+    @ONLY
+)
+
+configure_file(
+    data/kde-osk-input-panel.desktop.in
+    ${CMAKE_CURRENT_BINARY_DIR}/kde-osk-input-panel.desktop
     @ONLY
 )
 
@@ -231,9 +238,9 @@ if(KDE_OSK_BUILD_KWIN_BROKER)
     )
 endif()
 
-if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
+if((KDE_OSK_BUILD_INPUT_PANEL OR KDE_OSK_BUILD_SDDM_INPUTMETHOD)
     AND NOT KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS)
-    qt_add_executable(kde-osk-sddm-inputmethod
+    qt_add_library(kde-osk-inputmethod-common STATIC
         src/HardwareKeyboardMonitor.cpp
         src/HardwareKeyboardMonitor.h
         src/sddm/InputPanelIntegration.cpp
@@ -245,9 +252,86 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
         src/sddm/QWaylandInputPanelSurface.h
         src/sddm/SddmInputMethodController.cpp
         src/sddm/SddmInputMethodController.h
-        src/sddm/SddmInputMethodMain.cpp
         src/sddm/WaylandInputMethod.cpp
         src/sddm/WaylandInputMethod.h
+    )
+
+    qt6_generate_wayland_protocol_client_sources(kde-osk-inputmethod-common
+        NO_INCLUDE_CORE_ONLY
+        FILES
+            ${KDE_OSK_INPUT_METHOD_PROTOCOL}
+    )
+
+    target_link_libraries(kde-osk-inputmethod-common
+        PUBLIC
+            Qt6::Core
+            Qt6::Gui
+            Qt6::GuiPrivate
+            Qt6::WaylandClient
+            Qt6::WaylandClientPrivate
+            PkgConfig::LIBUDEV
+        PRIVATE
+            Qt6::Qml
+            Qt6::Quick
+            Qt6::QuickControls2
+    )
+
+    target_include_directories(kde-osk-inputmethod-common
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sddm
+            ${CMAKE_CURRENT_BINARY_DIR}
+            ${KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT}
+    )
+endif()
+
+if(KDE_OSK_BUILD_INPUT_PANEL
+    AND NOT KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS)
+    qt_add_executable(kde-osk-input-panel
+        src/panel/InputPanelMain.cpp
+    )
+
+    qt_add_qml_module(kde-osk-input-panel
+        URI KdeOsk.InputPanel
+        VERSION 1.0
+        QML_FILES
+            qml/InputPanel.qml
+            qml/KeyboardView.qml
+            qml/KeyButton.qml
+    )
+
+    target_link_libraries(kde-osk-input-panel
+        PRIVATE
+            Qt6::Core
+            Qt6::Gui
+            Qt6::GuiPrivate
+            Qt6::Qml
+            Qt6::Quick
+            Qt6::QuickControls2
+            kde-osk-inputmethod-common
+    )
+
+    install(TARGETS kde-osk-input-panel
+        BUNDLE DESTINATION .
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kde-osk-input-panel.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+    )
+    set(KDE_OSK_INPUT_PANEL_BUILT TRUE)
+elseif(KDE_OSK_BUILD_INPUT_PANEL)
+    string(REPLACE ";" ", " KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS_TEXT "${KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS}")
+    message(WARNING "The generic input-panel backend will not be built. Missing: ${KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS_TEXT}")
+    add_custom_target(kde-osk-input-panel
+        COMMAND ${CMAKE_COMMAND} -E echo "Cannot build kde-osk-input-panel. Missing: ${KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS_TEXT}"
+        COMMAND ${CMAKE_COMMAND} -E false
+    )
+endif()
+
+if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
+    AND NOT KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS)
+    qt_add_executable(kde-osk-sddm-inputmethod
+        src/sddm/SddmInputMethodMain.cpp
     )
 
     qt_add_qml_module(kde-osk-sddm-inputmethod
@@ -259,12 +343,6 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
             qml/KeyButton.qml
     )
 
-    qt6_generate_wayland_protocol_client_sources(kde-osk-sddm-inputmethod
-        NO_INCLUDE_CORE_ONLY
-        FILES
-            ${KDE_OSK_INPUT_METHOD_PROTOCOL}
-    )
-
     target_link_libraries(kde-osk-sddm-inputmethod
         PRIVATE
             Qt6::Core
@@ -273,16 +351,7 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
             Qt6::Qml
             Qt6::Quick
             Qt6::QuickControls2
-            Qt6::WaylandClient
-            Qt6::WaylandClientPrivate
-            PkgConfig::LIBUDEV
-    )
-
-    target_include_directories(kde-osk-sddm-inputmethod
-        PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/src
-            ${CMAKE_CURRENT_BINARY_DIR}
-            ${KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT}
+            kde-osk-inputmethod-common
     )
 
     install(TARGETS kde-osk-sddm-inputmethod

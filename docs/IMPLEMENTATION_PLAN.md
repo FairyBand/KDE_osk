@@ -60,7 +60,22 @@ Future done criteria:
 - KDE OSK appears as a KWin input-panel surface, not a normal desktop window.
 - Password/hidden-text contexts enter secure-input mode.
 
-## 4. Lock Screen
+## 4. Direct Input Panel
+
+Build `kde-osk-input-panel` as a direct KWin Wayland input-method/input-panel
+backend for real-machine testing.
+
+Done criteria:
+
+- The target reuses the shared keyboard QML and SDDM input-method controller.
+- It installs a KDE virtual-keyboard desktop entry.
+- Selecting it in Plasma can show the KDE OSK panel as an input-panel surface.
+- Hardware-keyboard suppression and text commit match the SDDM path.
+
+This is a testing and fallback backend. It does not preserve stock fcitx5 for
+normal desktop input while selected.
+
+## 5. Lock Screen
 
 Reuse the keyboard QML component inside the Plasma lock-screen process or a
 dedicated kscreenlocker integration. The lock screen is part of the user's
@@ -78,7 +93,7 @@ For the release-grade path, the lock screen should preferably use the broker and
 KWin input-panel route. Direct lock-screen QML integration remains a fallback
 for environments where the broker cannot be used.
 
-## 5. SDDM
+## 6. SDDM
 
 Build a greeter-side Wayland input-method backend, not an SDDM theme fork. KDE
 Breeze already exposes a virtual-keyboard button that talks to the greeter KWin
@@ -101,12 +116,13 @@ Done criteria:
 - The installed Breeze SDDM theme is not modified or copied.
 - No user-session `kwinrc` or Plasma virtual-keyboard setting is changed.
 
-## 6. Packaging
+## 7. Packaging
 
 Package as distro-friendly components:
 
 - `kde-osk-shell`
 - `kde-osk-kwin-broker`
+- `kde-osk-input-panel`
 - `fcitx5-kde-osk-bridge`
 - `plasma-kde-osk-lockscreen`
 - `sddm-kde-osk`

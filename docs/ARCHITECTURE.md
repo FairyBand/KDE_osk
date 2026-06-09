@@ -95,6 +95,15 @@ This broker path is preferred over Plasma lock-screen QML integration for
 long-term distribution use because the lock screen can use the existing KWin
 virtual-keyboard path instead of a theme-specific QML hook.
 
+### Direct KDE OSK Input Panel
+
+`kde-osk-input-panel` is a direct KWin Wayland input-method/input-panel backend.
+It reuses the same controller and input-panel shell integration as the SDDM
+backend, but presents a generic KDE OSK QML entry point. This target exists for
+real-machine testing and fallback use while the resident broker grows full panel
+multiplexing. When selected directly in KDE settings, it does not preserve
+fcitx5 as the normal desktop input backend.
+
 ### Plasma Lock Screen
 
 The lock screen runs inside the already logged-in Plasma session. The long-term
@@ -137,11 +146,12 @@ is an SDDM greeter component.
 1. Build and install `kde-osk-shell`.
 2. Provide a D-Bus API and hardware keyboard suppression.
 3. Add `kde-osk-kwin-broker` and verify that it delegates to stock fcitx5.
-4. Implement the fcitx5 bridge for desktop focus and text commit where the
+4. Add `kde-osk-input-panel` for direct KWin input-panel testing.
+5. Implement the fcitx5 bridge for desktop focus and text commit where the
    non-broker shell path is still used.
-5. Add the broker resident mode and KWin input-panel KDE OSK surface.
-6. Package the SDDM greeter input-method backend and SDDM configuration helper.
-7. Add settings UI for layouts, device policy, height, opacity, and haptics.
+6. Add the broker resident mode and KWin input-panel KDE OSK surface.
+7. Package the SDDM greeter input-method backend and SDDM configuration helper.
+8. Add settings UI for layouts, device policy, height, opacity, and haptics.
 
 ## Non-Goals For Milestone 1
 
