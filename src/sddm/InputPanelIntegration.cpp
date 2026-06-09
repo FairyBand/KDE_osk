@@ -3,6 +3,7 @@
 #include "QWaylandInputPanelShellIntegration.h"
 
 #include <QDebug>
+#include <QtGlobal>
 #include <QWindow>
 #include <QtWaylandClient/private/qwaylandwindow_p.h>
 
@@ -21,6 +22,10 @@ bool initializeInputPanelSurface(QWindow *window, InputPanelRole::Role role)
         return false;
     }
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 10, 0)
+    qWarning() << "This QtWayland version cannot assign an input-panel shell integration per window.";
+    return false;
+#else
     static QWaylandInputPanelShellIntegration *shellIntegration = nullptr;
     if (shellIntegration == nullptr) {
         shellIntegration = new QWaylandInputPanelShellIntegration;
@@ -34,4 +39,5 @@ bool initializeInputPanelSurface(QWindow *window, InputPanelRole::Role role)
 
     waylandWindow->setShellIntegration(shellIntegration);
     return true;
+#endif
 }

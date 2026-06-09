@@ -52,12 +52,16 @@ Typical dependencies:
 sudo pacman -S cmake extra-cmake-modules qt6-base qt6-declarative qt6-quickcontrols2 qt6-wayland wayland-protocols layer-shell-qt systemd
 
 # Debian/Ubuntu family
-sudo apt install cmake extra-cmake-modules qt6-base-dev qt6-declarative-dev qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window qml6-module-qtquick-templates qml6-module-qtquick-nativestyle qml6-module-qtqml-workerscript qt6-wayland qt6-wayland-dev wayland-protocols libudev-dev liblayershellqtinterface-dev pkg-config
+sudo apt install cmake extra-cmake-modules qt6-base-dev qt6-declarative-dev qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window qml6-module-qtquick-templates qml6-module-qtquick-nativestyle qml6-module-qtqml-workerscript qt6-wayland qt6-wayland-dev qt6-wayland-private-dev wayland-protocols libudev-dev liblayershellqtinterface-dev pkg-config
 ```
 
 Some Debian/Ubuntu releases do not ship the Qt Wayland client private headers
 needed to build `kde-osk-sddm-inputmethod`; in that case CMake leaves the SDDM
 backend disabled while still building the desktop shell.
+The greeter input-panel path uses a QtWayland private per-window shell
+integration API that is available on current Arch Qt 6.11 packages. Older Qt
+builds can compile the target for development checks, but the SDDM input-panel
+window will report that the runtime integration is unavailable.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
