@@ -332,6 +332,90 @@ private:
     QSet<uint32_t> m_reservedPanelGlobalNames;
 };
 
+void appendUint32(QByteArray &buffer, uint32_t value)
+{
+    buffer.append(reinterpret_cast<const char *>(&value), sizeof(value));
+}
+
+QByteArray makeWaylandString(const QString &text)
+{
+    QByteArray encoded = text.toUtf8();
+    encoded.append('\0');
+
+    QByteArray payload;
+    appendUint32(payload, static_cast<uint32_t>(encoded.size()));
+    payload.append(encoded);
+    while (payload.size() % 4 != 0) {
+        payload.append('\0');
+    }
+    return payload;
+}
+
+QByteArray makeWaylandMessage(uint32_t objectId, uint16_t opcode, const QByteArray &payload)
+{
+    const uint16_t messageSize = static_cast<uint16_t>(8 + payload.size());
+    const uint32_t sizeAndOpcode = (static_cast<uint32_t>(messageSize) << 16) | opcode;
+
+    QByteArray message;
+    appendUint32(message, objectId);
+    appendUint32(message, sizeAndOpcode);
+    message.append(payload);
+    return message;
+}
+
+QByteArray makeRegistryGlobalMessage(uint32_t registryId, uint32_t name, const QString &interfaceName, uint32_t version)
+{
+    QByteArray payload;
+    appendUint32(payload, name);
+    payload.append(makeWaylandString(interfaceName));
+    appendUint32(payload, version);
+    return makeWaylandMessage(registryId, WlRegistryGlobalOpcode, payload);
+}
+
+int runProtocolFilterSelfTest()
+{
+    constexpr uint32_t RegistryId = 2;
+    constexpr uint32_t InputMethodGlobalName = 10;
+    constexpr uint32_t InputPanelGlobalName = 11;
+
+    WaylandProtocolInspector inspector;
+
+    QByteArray getRegistryPayload;
+    appendUint32(getRegistryPayload, RegistryId);
+    const QByteArray getRegistry = makeWaylandMessage(WlDisplayObjectId, WlDisplayGetRegistryOpcode, getRegistryPayload);
+    inspector.inspect(WaylandProtocolInspector::Direction::DownstreamToUpstream, getRegistry.constData(), getRegistry.size());
+
+    const QByteArray inputMethodGlobal = makeRegistryGlobalMessage(RegistryId,
+                                                                   InputMethodGlobalName,
+                                                                   QStringLiteral("zwp_input_method_v1"),
+                                                                   1);
+    const QByteArray inputPanelGlobal = makeRegistryGlobalMessage(RegistryId,
+                                                                  InputPanelGlobalName,
+                                                                  QStringLiteral("zwp_input_panel_v1"),
+                                                                  1);
+
+    QByteArray filteredOutput;
+    const QByteArray globals = inputMethodGlobal + inputPanelGlobal;
+    inspector.filterUpstreamToDownstream(globals.constData(), globals.size(), filteredOutput);
+    if (filteredOutput != inputMethodGlobal) {
+        qCritical() << "Wayland protocol filter self-test failed: input-panel global was not reserved correctly.";
+        return 1;
+    }
+
+    QByteArray removePayload;
+    appendUint32(removePayload, InputPanelGlobalName);
+    const QByteArray panelRemove = makeWaylandMessage(RegistryId, WlRegistryGlobalRemoveOpcode, removePayload);
+    filteredOutput.clear();
+    inspector.filterUpstreamToDownstream(panelRemove.constData(), panelRemove.size(), filteredOutput);
+    if (!filteredOutput.isEmpty()) {
+        qCritical() << "Wayland protocol filter self-test failed: reserved input-panel removal leaked to fcitx5.";
+        return 1;
+    }
+
+    qInfo() << "Wayland protocol filter self-test passed.";
+    return 0;
+}
+
 class WaylandSocketProxy final : public QObject
 {
 public:
@@ -817,6 +901,11 @@ int main(int argc, char *argv[])
         QStringLiteral("Validate the broker startup environment and exit without launching fcitx5."));
     parser.addOption(checkOnlyOption);
 
+    QCommandLineOption selfTestProtocolFilterOption(
+        QStringLiteral("self-test-protocol-filter"),
+        QStringLiteral("Run the broker Wayland protocol filter self-test and exit."));
+    parser.addOption(selfTestProtocolFilterOption);
+
     QCommandLineOption execFcitx5Option(
         QStringLiteral("exec-fcitx5"),
         QStringLiteral("Compatibility mode: replace the broker process with stock fcitx5."));
@@ -830,6 +919,10 @@ int main(int argc, char *argv[])
     parser.addOption(timeoutOption);
 
     parser.process(app);
+
+    if (parser.isSet(selfTestProtocolFilterOption)) {
+        return runProtocolFilterSelfTest();
+    }
 
     const QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     const QString waylandSocket = environment.value(QStringLiteral("WAYLAND_SOCKET"));
