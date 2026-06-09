@@ -34,6 +34,8 @@ At this stage the proxy forwards bytes and Wayland file descriptors while
 inspecting `wl_registry` globals and binds. The fcitx5 branch still receives the
 normal input-method path, but `zwp_input_panel_v1` is filtered out of fcitx5's
 registry view and reserved for the future KDE OSK panel branch.
+The broker also maintains separate registry projections for the fcitx5
+input-method branch and the KDE OSK panel branch.
 `kde-osk-kwin-broker --self-test-protocol-filter` validates this registry
 filtering without needing a live KWin socket.
 

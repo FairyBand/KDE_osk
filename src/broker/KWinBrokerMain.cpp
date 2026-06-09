@@ -19,10 +19,10 @@
 #include <QTimer>
 #include <QVector>
 
+#include <algorithm>
 #include <cstdint>
 
 #ifdef Q_OS_UNIX
-#include <algorithm>
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -96,6 +96,17 @@ public:
         DownstreamToUpstream,
     };
 
+    enum class RegistryView {
+        FcitxInputMethodBranch,
+        KdeOskPanelBranch,
+    };
+
+    struct RegistryGlobal {
+        uint32_t name = 0;
+        QString interfaceName;
+        uint32_t version = 0;
+    };
+
     void inspect(Direction direction, const char *data, qsizetype size)
     {
         QByteArray &buffer = direction == Direction::UpstreamToDownstream ? m_upstreamBuffer : m_downstreamBuffer;
@@ -134,6 +145,24 @@ public:
         }
     }
 
+    QVector<RegistryGlobal> projectedGlobals(RegistryView view) const
+    {
+        QVector<RegistryGlobal> globals;
+        for (const uint32_t name : m_globalOrder) {
+            const QString interfaceName = m_globalInterfaces.value(name);
+            if (interfaceName.isEmpty() || !shouldExposeInView(view, interfaceName, name)) {
+                continue;
+            }
+
+            globals.push_back({
+                name,
+                interfaceName,
+                m_globalVersions.value(name),
+            });
+        }
+        return globals;
+    }
+
 private:
     static uint32_t readUint32(const char *data)
     {
@@ -164,6 +193,18 @@ private:
     {
         return interfaceName == QStringLiteral("zwp_input_method_v1")
             || interfaceName == QStringLiteral("zwp_input_panel_v1");
+    }
+
+    bool shouldExposeInView(RegistryView view, const QString &interfaceName, uint32_t name) const
+    {
+        switch (view) {
+        case RegistryView::FcitxInputMethodBranch:
+            return !m_reservedPanelGlobalNames.contains(name)
+                && interfaceName != QStringLiteral("zwp_input_panel_v1");
+        case RegistryView::KdeOskPanelBranch:
+            return interfaceName != QStringLiteral("zwp_input_method_v1");
+        }
+        return false;
     }
 
     void parseBufferedMessages(Direction direction, QByteArray &buffer)
@@ -208,6 +249,7 @@ private:
             const uint32_t name = readUint32(payload);
             const QString interfaceName = m_globalInterfaces.take(name);
             m_globalVersions.remove(name);
+            m_globalOrder.removeAll(name);
             if (isPrivilegedInputInterface(interfaceName)) {
                 qInfo() << "KWin removed privileged Wayland global" << interfaceName << "name" << name;
             }
@@ -238,6 +280,9 @@ private:
 
         m_globalInterfaces.insert(name, interfaceName);
         m_globalVersions.insert(name, version);
+        if (!m_globalOrder.contains(name)) {
+            m_globalOrder.push_back(name);
+        }
 
         if (isPrivilegedInputInterface(interfaceName)) {
             qInfo() << "KWin advertised privileged Wayland global" << interfaceName
@@ -330,6 +375,7 @@ private:
     QHash<uint32_t, uint32_t> m_globalVersions;
     QHash<uint32_t, QString> m_objectInterfaces;
     QSet<uint32_t> m_reservedPanelGlobalNames;
+    QVector<uint32_t> m_globalOrder;
 };
 
 void appendUint32(QByteArray &buffer, uint32_t value)
@@ -375,6 +421,7 @@ QByteArray makeRegistryGlobalMessage(uint32_t registryId, uint32_t name, const Q
 int runProtocolFilterSelfTest()
 {
     constexpr uint32_t RegistryId = 2;
+    constexpr uint32_t CompositorGlobalName = 3;
     constexpr uint32_t InputMethodGlobalName = 10;
     constexpr uint32_t InputPanelGlobalName = 11;
 
@@ -385,6 +432,10 @@ int runProtocolFilterSelfTest()
     const QByteArray getRegistry = makeWaylandMessage(WlDisplayObjectId, WlDisplayGetRegistryOpcode, getRegistryPayload);
     inspector.inspect(WaylandProtocolInspector::Direction::DownstreamToUpstream, getRegistry.constData(), getRegistry.size());
 
+    const QByteArray compositorGlobal = makeRegistryGlobalMessage(RegistryId,
+                                                                  CompositorGlobalName,
+                                                                  QStringLiteral("wl_compositor"),
+                                                                  6);
     const QByteArray inputMethodGlobal = makeRegistryGlobalMessage(RegistryId,
                                                                    InputMethodGlobalName,
                                                                    QStringLiteral("zwp_input_method_v1"),
@@ -395,10 +446,32 @@ int runProtocolFilterSelfTest()
                                                                   1);
 
     QByteArray filteredOutput;
-    const QByteArray globals = inputMethodGlobal + inputPanelGlobal;
+    const QByteArray globals = compositorGlobal + inputMethodGlobal + inputPanelGlobal;
     inspector.filterUpstreamToDownstream(globals.constData(), globals.size(), filteredOutput);
-    if (filteredOutput != inputMethodGlobal) {
+    if (filteredOutput != compositorGlobal + inputMethodGlobal) {
         qCritical() << "Wayland protocol filter self-test failed: input-panel global was not reserved correctly.";
+        return 1;
+    }
+
+    const QVector<WaylandProtocolInspector::RegistryGlobal> fcitxGlobals =
+        inspector.projectedGlobals(WaylandProtocolInspector::RegistryView::FcitxInputMethodBranch);
+    const QVector<WaylandProtocolInspector::RegistryGlobal> panelGlobals =
+        inspector.projectedGlobals(WaylandProtocolInspector::RegistryView::KdeOskPanelBranch);
+    const auto containsInterface = [](const QVector<WaylandProtocolInspector::RegistryGlobal> &globals, const QString &interfaceName) {
+        return std::any_of(globals.cbegin(), globals.cend(), [&interfaceName](const WaylandProtocolInspector::RegistryGlobal &global) {
+            return global.interfaceName == interfaceName;
+        });
+    };
+
+    if (!containsInterface(fcitxGlobals, QStringLiteral("zwp_input_method_v1"))
+        || containsInterface(fcitxGlobals, QStringLiteral("zwp_input_panel_v1"))) {
+        qCritical() << "Wayland protocol filter self-test failed: fcitx registry projection is incorrect.";
+        return 1;
+    }
+    if (!containsInterface(panelGlobals, QStringLiteral("zwp_input_panel_v1"))
+        || containsInterface(panelGlobals, QStringLiteral("zwp_input_method_v1"))
+        || !containsInterface(panelGlobals, QStringLiteral("wl_compositor"))) {
+        qCritical() << "Wayland protocol filter self-test failed: KDE OSK panel registry projection is incorrect.";
         return 1;
     }
 
