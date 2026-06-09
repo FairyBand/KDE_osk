@@ -27,6 +27,11 @@ public:
                               int autoShowDelayMs,
                               bool requireContextUpdateForAutoShow,
                               QObject *parent = nullptr);
+    SddmInputMethodController(HardwareKeyboardMonitor *hardwareKeyboardMonitor,
+                              int autoShowDelayMs,
+                              bool requireContextUpdateForAutoShow,
+                              bool ignoreInitialContextUpdatesForAutoShow,
+                              QObject *parent = nullptr);
 
     bool visible() const;
     bool inputBackendAvailable() const;
@@ -57,6 +62,8 @@ private:
     bool sendSpecialKey(const QString &keyId);
     void handleContextActiveChanged(bool active);
     void handleContextUpdated();
+    void handleContextInvoked();
+    void finishInitialContextUpdateSettling();
     void updateState();
     bool shouldShow() const;
     void setVisible(bool visible);
@@ -64,11 +71,14 @@ private:
     HardwareKeyboardMonitor *m_hardwareKeyboardMonitor = nullptr;
     WaylandInputMethod m_inputMethod;
     QTimer m_autoShowTimer;
+    QTimer m_initialContextUpdateSettleTimer;
     bool m_visible = false;
     bool m_autoShowEnabled = true;
     bool m_ignoreHardwareKeyboard = false;
     bool m_userHidden = false;
     bool m_requireContextUpdateForAutoShow = false;
+    bool m_ignoreInitialContextUpdatesForAutoShow = false;
+    bool m_waitingForInitialContextUpdatesToSettle = false;
     bool m_contextReadyForAutoShow = false;
     bool m_capsLockActive = false;
     int m_autoShowDelayMs = 0;

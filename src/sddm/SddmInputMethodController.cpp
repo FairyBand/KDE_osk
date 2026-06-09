@@ -22,6 +22,7 @@ constexpr uint XkbKeyPageDown = 0xff56;
 constexpr uint XkbKeyEnd = 0xff57;
 constexpr uint XkbKeyF1 = 0xffbe;
 constexpr uint XkbKeyDelete = 0xffff;
+constexpr int InitialContextUpdateSettleMs = 250;
 }
 
 SddmInputMethodController::SddmInputMethodController(HardwareKeyboardMonitor *hardwareKeyboardMonitor, QObject *parent)
@@ -38,9 +39,19 @@ SddmInputMethodController::SddmInputMethodController(HardwareKeyboardMonitor *ha
                                                      int autoShowDelayMs,
                                                      bool requireContextUpdateForAutoShow,
                                                      QObject *parent)
+    : SddmInputMethodController(hardwareKeyboardMonitor, autoShowDelayMs, requireContextUpdateForAutoShow, false, parent)
+{
+}
+
+SddmInputMethodController::SddmInputMethodController(HardwareKeyboardMonitor *hardwareKeyboardMonitor,
+                                                     int autoShowDelayMs,
+                                                     bool requireContextUpdateForAutoShow,
+                                                     bool ignoreInitialContextUpdatesForAutoShow,
+                                                     QObject *parent)
     : QObject(parent)
     , m_hardwareKeyboardMonitor(hardwareKeyboardMonitor)
     , m_requireContextUpdateForAutoShow(requireContextUpdateForAutoShow)
+    , m_ignoreInitialContextUpdatesForAutoShow(ignoreInitialContextUpdatesForAutoShow)
     , m_autoShowDelayMs(autoShowDelayMs)
     , m_shiftedLabels({
           {QStringLiteral("`"), QStringLiteral("~")},
@@ -72,9 +83,12 @@ SddmInputMethodController::SddmInputMethodController(HardwareKeyboardMonitor *ha
             setVisible(true);
         }
     });
+    m_initialContextUpdateSettleTimer.setSingleShot(true);
+    connect(&m_initialContextUpdateSettleTimer, &QTimer::timeout, this, &SddmInputMethodController::finishInitialContextUpdateSettling);
 
     connect(&m_inputMethod, &WaylandInputMethod::contextActiveChanged, this, &SddmInputMethodController::handleContextActiveChanged);
     connect(&m_inputMethod, &WaylandInputMethod::contextUpdated, this, &SddmInputMethodController::handleContextUpdated);
+    connect(&m_inputMethod, &WaylandInputMethod::contextInvoked, this, &SddmInputMethodController::handleContextInvoked);
     connect(&m_inputMethod, &WaylandInputMethod::protocolReadyChanged, this, &SddmInputMethodController::updateState);
     connect(m_hardwareKeyboardMonitor, &HardwareKeyboardMonitor::hardwareKeyboardPresentChanged, this, [this](bool present) {
         emit hardwareKeyboardPresentChanged(present);
@@ -209,6 +223,14 @@ void SddmInputMethodController::handleContextActiveChanged(bool active)
 {
     m_userHidden = false;
     m_contextReadyForAutoShow = active && !m_requireContextUpdateForAutoShow;
+    m_waitingForInitialContextUpdatesToSettle = active
+        && m_requireContextUpdateForAutoShow
+        && m_ignoreInitialContextUpdatesForAutoShow;
+    if (m_waitingForInitialContextUpdatesToSettle) {
+        m_initialContextUpdateSettleTimer.start(InitialContextUpdateSettleMs);
+    } else {
+        m_initialContextUpdateSettleTimer.stop();
+    }
     if (!active) {
         m_autoShowTimer.stop();
     }
@@ -221,11 +243,36 @@ void SddmInputMethodController::handleContextUpdated()
         return;
     }
 
+    if (m_waitingForInitialContextUpdatesToSettle) {
+        m_initialContextUpdateSettleTimer.start(InitialContextUpdateSettleMs);
+        return;
+    }
+
     if (m_userHidden) {
         m_userHidden = false;
     }
     m_contextReadyForAutoShow = true;
     updateState();
+}
+
+void SddmInputMethodController::handleContextInvoked()
+{
+    if (!m_inputMethod.contextActive()) {
+        return;
+    }
+
+    finishInitialContextUpdateSettling();
+    if (m_userHidden) {
+        m_userHidden = false;
+    }
+    m_contextReadyForAutoShow = true;
+    updateState();
+}
+
+void SddmInputMethodController::finishInitialContextUpdateSettling()
+{
+    m_initialContextUpdateSettleTimer.stop();
+    m_waitingForInitialContextUpdatesToSettle = false;
 }
 
 QString SddmInputMethodController::textForKey(const QString &keyId, bool shift) const

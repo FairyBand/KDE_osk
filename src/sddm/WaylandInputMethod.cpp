@@ -54,6 +54,7 @@ void WaylandInputMethod::zwp_input_method_v1_activate(struct ::zwp_input_method_
 {
     auto *context = new WaylandInputMethodContext(id, this);
     connect(context, &WaylandInputMethodContext::updated, this, &WaylandInputMethod::contextUpdated);
+    connect(context, &WaylandInputMethodContext::invoked, this, &WaylandInputMethod::contextInvoked);
     setContext(context);
 }
 
@@ -122,6 +123,7 @@ void WaylandInputMethodContext::zwp_input_method_context_v1_invoke_action(uint b
 {
     Q_UNUSED(button)
     Q_UNUSED(index)
+    emit invoked();
     emit updated();
 }
 

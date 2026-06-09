@@ -32,6 +32,7 @@ signals:
     void contextActiveChanged(bool active);
     void protocolReadyChanged(bool ready);
     void contextUpdated();
+    void contextInvoked();
 
 private:
     void zwp_input_method_v1_activate(struct ::zwp_input_method_context_v1 *id) override;
@@ -55,6 +56,7 @@ public:
 
 signals:
     void updated();
+    void invoked();
 
 private:
     void zwp_input_method_context_v1_commit_state(uint serial) override;
