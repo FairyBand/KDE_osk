@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QHash>
 #include <QString>
+#include <QTimer>
 
 class HardwareKeyboardMonitor;
 
@@ -21,6 +22,11 @@ class SddmInputMethodController : public QObject
 
 public:
     explicit SddmInputMethodController(HardwareKeyboardMonitor *hardwareKeyboardMonitor, QObject *parent = nullptr);
+    SddmInputMethodController(HardwareKeyboardMonitor *hardwareKeyboardMonitor, int autoShowDelayMs, QObject *parent = nullptr);
+    SddmInputMethodController(HardwareKeyboardMonitor *hardwareKeyboardMonitor,
+                              int autoShowDelayMs,
+                              bool requireContextUpdateForAutoShow,
+                              QObject *parent = nullptr);
 
     bool visible() const;
     bool inputBackendAvailable() const;
@@ -49,13 +55,22 @@ signals:
 private:
     QString textForKey(const QString &keyId, bool shift) const;
     bool sendSpecialKey(const QString &keyId);
+    void handleContextActiveChanged(bool active);
+    void handleContextUpdated();
     void updateState();
+    bool shouldShow() const;
+    void setVisible(bool visible);
 
     HardwareKeyboardMonitor *m_hardwareKeyboardMonitor = nullptr;
     WaylandInputMethod m_inputMethod;
+    QTimer m_autoShowTimer;
     bool m_visible = false;
     bool m_autoShowEnabled = true;
     bool m_ignoreHardwareKeyboard = false;
+    bool m_userHidden = false;
+    bool m_requireContextUpdateForAutoShow = false;
+    bool m_contextReadyForAutoShow = false;
     bool m_capsLockActive = false;
+    int m_autoShowDelayMs = 0;
     const QHash<QString, QString> m_shiftedLabels;
 };

@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
     app.setOrganizationName(QStringLiteral("kde-osk"));
 
     HardwareKeyboardMonitor hardwareKeyboardMonitor;
-    SddmInputMethodController controller(&hardwareKeyboardMonitor);
+    SddmInputMethodController controller(&hardwareKeyboardMonitor, 700, true);
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("inputPanelController"), &controller);

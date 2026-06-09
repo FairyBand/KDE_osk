@@ -31,6 +31,7 @@ public:
 signals:
     void contextActiveChanged(bool active);
     void protocolReadyChanged(bool ready);
+    void contextUpdated();
 
 private:
     void zwp_input_method_v1_activate(struct ::zwp_input_method_context_v1 *id) override;
@@ -51,6 +52,9 @@ public:
     void commitText(const QString &text);
     void deleteSurroundingText(int beforeLength, uint afterLength);
     void sendKeysym(uint keysym);
+
+signals:
+    void updated();
 
 private:
     void zwp_input_method_context_v1_commit_state(uint serial) override;

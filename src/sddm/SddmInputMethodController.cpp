@@ -25,8 +25,23 @@ constexpr uint XkbKeyDelete = 0xffff;
 }
 
 SddmInputMethodController::SddmInputMethodController(HardwareKeyboardMonitor *hardwareKeyboardMonitor, QObject *parent)
+    : SddmInputMethodController(hardwareKeyboardMonitor, 0, false, parent)
+{
+}
+
+SddmInputMethodController::SddmInputMethodController(HardwareKeyboardMonitor *hardwareKeyboardMonitor, int autoShowDelayMs, QObject *parent)
+    : SddmInputMethodController(hardwareKeyboardMonitor, autoShowDelayMs, false, parent)
+{
+}
+
+SddmInputMethodController::SddmInputMethodController(HardwareKeyboardMonitor *hardwareKeyboardMonitor,
+                                                     int autoShowDelayMs,
+                                                     bool requireContextUpdateForAutoShow,
+                                                     QObject *parent)
     : QObject(parent)
     , m_hardwareKeyboardMonitor(hardwareKeyboardMonitor)
+    , m_requireContextUpdateForAutoShow(requireContextUpdateForAutoShow)
+    , m_autoShowDelayMs(autoShowDelayMs)
     , m_shiftedLabels({
           {QStringLiteral("`"), QStringLiteral("~")},
           {QStringLiteral("1"), QStringLiteral("!")},
@@ -51,7 +66,15 @@ SddmInputMethodController::SddmInputMethodController(HardwareKeyboardMonitor *ha
           {QStringLiteral("/"), QStringLiteral("?")},
       })
 {
-    connect(&m_inputMethod, &WaylandInputMethod::contextActiveChanged, this, &SddmInputMethodController::updateState);
+    m_autoShowTimer.setSingleShot(true);
+    connect(&m_autoShowTimer, &QTimer::timeout, this, [this]() {
+        if (shouldShow()) {
+            setVisible(true);
+        }
+    });
+
+    connect(&m_inputMethod, &WaylandInputMethod::contextActiveChanged, this, &SddmInputMethodController::handleContextActiveChanged);
+    connect(&m_inputMethod, &WaylandInputMethod::contextUpdated, this, &SddmInputMethodController::handleContextUpdated);
     connect(&m_inputMethod, &WaylandInputMethod::protocolReadyChanged, this, &SddmInputMethodController::updateState);
     connect(m_hardwareKeyboardMonitor, &HardwareKeyboardMonitor::hardwareKeyboardPresentChanged, this, [this](bool present) {
         emit hardwareKeyboardPresentChanged(present);
@@ -102,11 +125,9 @@ bool SddmInputMethodController::capsLockActive() const
 
 void SddmInputMethodController::hideKeyboard()
 {
-    if (!m_visible) {
-        return;
-    }
-    m_visible = false;
-    emit visibleChanged(m_visible);
+    m_userHidden = true;
+    m_autoShowTimer.stop();
+    setVisible(false);
 }
 
 void SddmInputMethodController::setAutoShowEnabled(bool enabled)
@@ -184,6 +205,29 @@ void SddmInputMethodController::setModifierActive(const QString &keyId, bool act
     Q_UNUSED(active)
 }
 
+void SddmInputMethodController::handleContextActiveChanged(bool active)
+{
+    m_userHidden = false;
+    m_contextReadyForAutoShow = active && !m_requireContextUpdateForAutoShow;
+    if (!active) {
+        m_autoShowTimer.stop();
+    }
+    updateState();
+}
+
+void SddmInputMethodController::handleContextUpdated()
+{
+    if (!m_inputMethod.contextActive()) {
+        return;
+    }
+
+    if (m_userHidden) {
+        m_userHidden = false;
+    }
+    m_contextReadyForAutoShow = true;
+    updateState();
+}
+
 QString SddmInputMethodController::textForKey(const QString &keyId, bool shift) const
 {
     if (keyId == QStringLiteral("Space")) {
@@ -250,13 +294,36 @@ bool SddmInputMethodController::sendSpecialKey(const QString &keyId)
 
 void SddmInputMethodController::updateState()
 {
-    const bool nextVisible = m_autoShowEnabled
-        && m_inputMethod.contextActive()
-        && (m_ignoreHardwareKeyboard || !m_hardwareKeyboardMonitor->hardwareKeyboardPresent());
-    if (m_visible != nextVisible) {
-        m_visible = nextVisible;
-        emit visibleChanged(m_visible);
+    const bool nextVisible = shouldShow();
+    if (!nextVisible) {
+        m_autoShowTimer.stop();
+        setVisible(false);
+    } else if (!m_visible && !m_autoShowTimer.isActive()) {
+        if (m_autoShowDelayMs > 0) {
+            m_autoShowTimer.start(m_autoShowDelayMs);
+        } else {
+            setVisible(true);
+        }
     }
     emit inputBackendAvailableChanged(inputBackendAvailable());
     emit inputBackendErrorChanged(inputBackendError());
+}
+
+bool SddmInputMethodController::shouldShow() const
+{
+    return m_autoShowEnabled
+        && m_inputMethod.contextActive()
+        && m_contextReadyForAutoShow
+        && !m_userHidden
+        && (m_ignoreHardwareKeyboard || !m_hardwareKeyboardMonitor->hardwareKeyboardPresent());
+}
+
+void SddmInputMethodController::setVisible(bool visible)
+{
+    if (m_visible == visible) {
+        return;
+    }
+
+    m_visible = visible;
+    emit visibleChanged(m_visible);
 }

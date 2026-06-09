@@ -52,7 +52,9 @@ void WaylandInputMethod::sendKeysym(uint keysym)
 
 void WaylandInputMethod::zwp_input_method_v1_activate(struct ::zwp_input_method_context_v1 *id)
 {
-    setContext(new WaylandInputMethodContext(id, this));
+    auto *context = new WaylandInputMethodContext(id, this);
+    connect(context, &WaylandInputMethodContext::updated, this, &WaylandInputMethod::contextUpdated);
+    setContext(context);
 }
 
 void WaylandInputMethod::zwp_input_method_v1_deactivate(struct ::zwp_input_method_context_v1 *context)
@@ -106,18 +108,21 @@ void WaylandInputMethodContext::sendKeysym(uint symbol)
 void WaylandInputMethodContext::zwp_input_method_context_v1_commit_state(uint serial)
 {
     m_serial = serial;
+    emit updated();
 }
 
 void WaylandInputMethodContext::zwp_input_method_context_v1_content_type(uint hint, uint purpose)
 {
     Q_UNUSED(hint)
     Q_UNUSED(purpose)
+    emit updated();
 }
 
 void WaylandInputMethodContext::zwp_input_method_context_v1_invoke_action(uint button, uint index)
 {
     Q_UNUSED(button)
     Q_UNUSED(index)
+    emit updated();
 }
 
 void WaylandInputMethodContext::zwp_input_method_context_v1_preferred_language(const QString &language)
@@ -127,6 +132,7 @@ void WaylandInputMethodContext::zwp_input_method_context_v1_preferred_language(c
 
 void WaylandInputMethodContext::zwp_input_method_context_v1_reset()
 {
+    emit updated();
 }
 
 void WaylandInputMethodContext::zwp_input_method_context_v1_surrounding_text(const QString &text, uint cursor, uint anchor)
@@ -134,4 +140,5 @@ void WaylandInputMethodContext::zwp_input_method_context_v1_surrounding_text(con
     Q_UNUSED(text)
     Q_UNUSED(cursor)
     Q_UNUSED(anchor)
+    emit updated();
 }
