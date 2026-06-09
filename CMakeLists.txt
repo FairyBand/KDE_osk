@@ -220,6 +220,7 @@ if(KDE_OSK_BUILD_KWIN_BROKER)
     target_link_libraries(kde-osk-kwin-broker
         PRIVATE
             Qt6::Core
+            Qt6::DBus
     )
     install(TARGETS kde-osk-kwin-broker
         BUNDLE DESTINATION .

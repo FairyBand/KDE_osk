@@ -49,14 +49,14 @@ Initial done criteria:
 
 - The broker installs a desktop entry with KDE virtual-keyboard metadata.
 - KWin can start the broker as the configured virtual-keyboard backend.
-- The broker delegates to the system `fcitx5` executable without changing normal
-  desktop input behavior.
+- The broker starts or waits for the system `fcitx5` service.
+- The broker delegates KWin's Wayland input-method socket to fcitx5 through
+  `ReopenWaylandConnectionSocket` without changing normal desktop input
+  behavior.
 - No custom fcitx5 package is required.
 
 Future done criteria:
 
-- A resident broker can delegate KWin's input-method socket to fcitx5 through
-  public fcitx5 mechanisms.
 - KDE OSK appears as a KWin input-panel surface, not a normal desktop window.
 - Password/hidden-text contexts enter secure-input mode.
 

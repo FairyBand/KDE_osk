@@ -86,10 +86,10 @@ for normal desktop input. This changes the settings entry the user selects, but
 does not require rebuilding or patching fcitx5.
 
 Initial broker behavior is conservative: validate the KWin input-method startup
-environment and `exec` stock `fcitx5`, so normal desktop input remains
-unchanged. Later broker milestones can keep a resident supervisor, delegate the
-KWin Wayland input-method socket to fcitx5 through public fcitx5 mechanisms, and
-show KDE OSK as a KWin input-panel surface when touch keyboard UI is needed.
+environment, start or wait for stock `fcitx5`, and delegate the KWin Wayland
+input-method socket to fcitx5 through fcitx5's public D-Bus controller API. The
+broker stays resident so KWin can supervise it. Later milestones can show KDE
+OSK as a KWin input-panel surface when touch keyboard UI is needed.
 
 This broker path is preferred over Plasma lock-screen QML integration for
 long-term distribution use because the lock screen can use the existing KWin

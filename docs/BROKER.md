@@ -28,12 +28,11 @@ kde-osk-kwin-broker
 
 The first broker milestone is intentionally conservative: when KWin starts the
 broker, the broker validates that it was launched in a Wayland input-method
-environment and then `exec`s the stock `fcitx5` process. This proves the KDE
-System Settings integration path without changing normal input behavior.
+environment, starts or waits for stock `fcitx5`, and hands KWin's Wayland
+input-method socket to fcitx5 through fcitx5's public D-Bus controller API.
 
-Later milestones can keep the broker resident and hand KWin's Wayland
-input-method socket to fcitx5 through fcitx5's Wayland module socket APIs, while
-also launching the KDE OSK input panel when appropriate.
+The old `exec` delegation path is kept as an explicit compatibility mode with
+`--exec-fcitx5`.
 
 ## Responsibilities
 
@@ -58,14 +57,13 @@ also launching the KDE OSK input panel when appropriate.
 ## Milestones
 
 1. Add the broker executable and KDE virtual-keyboard desktop entry.
-2. Verify that selecting "KDE OSK Broker" in Plasma starts stock fcitx5 and
-   keeps desktop input behavior unchanged.
+2. Verify that selecting "KDE OSK Broker" in Plasma starts stock fcitx5,
+   delegates KWin's socket through `ReopenWaylandConnectionSocket`, and keeps
+   desktop input behavior unchanged.
 3. Refactor the existing SDDM input-method/input-panel code into reusable broker
    building blocks.
-4. Add resident broker mode that delegates the KWin Wayland input-method socket
-   to stock fcitx5 through public fcitx5 mechanisms.
-5. Add the KDE OSK input-panel process and connect it to the broker's visibility
+4. Add the KDE OSK input-panel process and connect it to the broker's visibility
    and hardware-keyboard policy.
-6. Add secure-input mode based on input-method content type.
-7. Keep the existing SDDM greeter backend separate, because SDDM runs before the
+5. Add secure-input mode based on input-method content type.
+6. Keep the existing SDDM greeter backend separate, because SDDM runs before the
    user's fcitx5 session exists.
