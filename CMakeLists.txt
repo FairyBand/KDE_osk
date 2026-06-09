@@ -37,22 +37,60 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD)
         find_package(WaylandScanner QUIET)
     endif()
     find_package(Qt6WaylandScannerTools 6.4 QUIET CONFIG)
+    if(NOT TARGET Qt6::qtwaylandscanner)
+        find_program(KDE_OSK_QTWAYLANDSCANNER_EXECUTABLE
+            NAMES qtwaylandscanner
+            HINTS
+                /usr/lib/qt6
+                /usr/lib/qt6/bin
+                /usr/lib/qt6/libexec
+                /usr/bin)
+        if(KDE_OSK_QTWAYLANDSCANNER_EXECUTABLE)
+            add_executable(Qt6::qtwaylandscanner IMPORTED)
+            set_target_properties(Qt6::qtwaylandscanner PROPERTIES
+                IMPORTED_LOCATION "${KDE_OSK_QTWAYLANDSCANNER_EXECUTABLE}")
+        endif()
+    endif()
     if(Qt6WaylandClient_DIR AND EXISTS "${Qt6WaylandClient_DIR}/Qt6WaylandClientMacros.cmake")
         include("${Qt6WaylandClient_DIR}/Qt6WaylandClientMacros.cmake")
+    endif()
+    set(KDE_OSK_WAYLAND_PROTOCOL_HINTS
+        ${WaylandProtocols_DATADIR}
+        ${WaylandProtocols_DATA_DIR}
+        /usr/share/wayland-protocols
+        /usr/local/share/wayland-protocols)
+    find_path(KDE_OSK_WAYLAND_PROTOCOLS_ROOT
+        NAMES unstable/input-method/input-method-unstable-v1.xml
+        HINTS ${KDE_OSK_WAYLAND_PROTOCOL_HINTS})
+    if(KDE_OSK_WAYLAND_PROTOCOLS_ROOT)
+        set(KDE_OSK_INPUT_METHOD_PROTOCOL
+            "${KDE_OSK_WAYLAND_PROTOCOLS_ROOT}/unstable/input-method/input-method-unstable-v1.xml")
     endif()
     if(TARGET Qt6::WaylandClientPrivate)
         get_target_property(KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_INCLUDE_DIRS
             Qt6::WaylandClientPrivate
             INTERFACE_INCLUDE_DIRECTORIES)
-        find_path(KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT
-            NAMES QtWaylandClient/private/qwaylandwindow_p.h
-            HINTS ${KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_INCLUDE_DIRS}
-            NO_DEFAULT_PATH)
-        if(NOT KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT)
-            find_path(KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT
-                NAMES QtWaylandClient/private/qwaylandwindow_p.h)
-        endif()
     endif()
+    set(KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_HINTS
+        ${Qt6WaylandClient_PRIVATE_INCLUDE_DIRS}
+        ${Qt6WaylandClient_INCLUDE_DIRS}
+        ${KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_INCLUDE_DIRS}
+        /usr/include
+        /usr/local/include)
+    set(KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_CLEAN_HINTS)
+    foreach(includeDir IN LISTS KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_HINTS)
+        if(includeDir AND NOT includeDir MATCHES "^\\$<")
+            list(APPEND KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_CLEAN_HINTS "${includeDir}")
+        endif()
+    endforeach()
+    find_path(KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT
+        NAMES QtWaylandClient/private/qwaylandwindow_p.h
+        HINTS ${KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_CLEAN_HINTS}
+        PATH_SUFFIXES
+            QtWaylandClient/${Qt6_VERSION}
+            QtWaylandClient/${Qt6WaylandClient_VERSION}
+            qt6/QtWaylandClient/${Qt6_VERSION}
+            qt6/QtWaylandClient/${Qt6WaylandClient_VERSION})
 endif()
 
 set(KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS)
@@ -69,7 +107,7 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD)
     if(NOT KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT)
         list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "QtWaylandClient private headers")
     endif()
-    if(NOT WaylandProtocols_FOUND)
+    if(NOT KDE_OSK_INPUT_METHOD_PROTOCOL)
         list(APPEND KDE_OSK_SDDM_INPUTMETHOD_MISSING_DEPS "wayland-protocols")
     endif()
     if(NOT WaylandScanner_FOUND)
@@ -198,7 +236,7 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
 
     qt6_generate_wayland_protocol_client_sources(kde-osk-sddm-inputmethod
         FILES
-            ${WaylandProtocols_DATADIR}/unstable/input-method/input-method-unstable-v1.xml
+            ${KDE_OSK_INPUT_METHOD_PROTOCOL}
     )
 
     target_link_libraries(kde-osk-sddm-inputmethod
@@ -218,6 +256,7 @@ if(KDE_OSK_BUILD_SDDM_INPUTMETHOD
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_BINARY_DIR}
+            ${KDE_OSK_QT_WAYLANDCLIENT_PRIVATE_ROOT}
     )
 
     install(TARGETS kde-osk-sddm-inputmethod
