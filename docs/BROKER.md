@@ -36,6 +36,9 @@ normal input-method path, but `zwp_input_panel_v1` is filtered out of fcitx5's
 registry view and reserved for the future KDE OSK panel branch.
 The broker also maintains separate registry projections for the fcitx5
 input-method branch and the KDE OSK panel branch.
+The panel branch has a registry endpoint scaffold that can answer
+`wl_display.get_registry` with the KDE OSK panel view; object binding and
+surface traffic proxying are the next steps.
 `kde-osk-kwin-broker --self-test-protocol-filter` validates this registry
 filtering without needing a live KWin socket.
 

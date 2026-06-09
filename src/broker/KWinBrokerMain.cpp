@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <utility>
 
 #ifdef Q_OS_UNIX
 #include <cerrno>
@@ -28,7 +29,6 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <utility>
 #endif
 
 namespace
@@ -418,6 +418,75 @@ QByteArray makeRegistryGlobalMessage(uint32_t registryId, uint32_t name, const Q
     return makeWaylandMessage(registryId, WlRegistryGlobalOpcode, payload);
 }
 
+class PanelBranchEndpoint
+{
+public:
+    explicit PanelBranchEndpoint(QVector<WaylandProtocolInspector::RegistryGlobal> globals)
+        : m_globals(std::move(globals))
+    {
+    }
+
+    void receive(const char *data, qsizetype size, QByteArray &output)
+    {
+        m_buffer.append(data, size);
+
+        while (m_buffer.size() >= 8) {
+            const char *message = m_buffer.constData();
+            const uint32_t objectId = readUint32(message);
+            const uint32_t sizeAndOpcode = readUint32(message + 4);
+            const uint16_t opcode = static_cast<uint16_t>(sizeAndOpcode & 0xffff);
+            const uint16_t messageSize = static_cast<uint16_t>(sizeAndOpcode >> 16);
+
+            if (messageSize < 8) {
+                qWarning() << "Invalid Wayland message size from panel branch:" << messageSize;
+                m_buffer.clear();
+                return;
+            }
+            if (m_buffer.size() < messageSize) {
+                return;
+            }
+
+            const char *payload = message + 8;
+            const qsizetype payloadSize = messageSize - 8;
+            handleMessage(objectId, opcode, payload, payloadSize, output);
+            m_buffer.remove(0, messageSize);
+        }
+    }
+
+private:
+    static uint32_t readUint32(const char *data)
+    {
+        uint32_t value = 0;
+        memcpy(&value, data, sizeof(value));
+        return value;
+    }
+
+    void handleMessage(uint32_t objectId, uint16_t opcode, const char *payload, qsizetype payloadSize, QByteArray &output)
+    {
+        if (objectId == WlDisplayObjectId && opcode == WlDisplayGetRegistryOpcode && payloadSize >= 4) {
+            const uint32_t registryId = readUint32(payload);
+            m_registryObjectIds.insert(registryId);
+            sendRegistryProjection(registryId, output);
+            return;
+        }
+
+        if (m_registryObjectIds.contains(objectId) && opcode == WlRegistryBindOpcode) {
+            qInfo() << "KDE OSK panel branch registry bind received; object mapping is not enabled yet.";
+        }
+    }
+
+    void sendRegistryProjection(uint32_t registryId, QByteArray &output)
+    {
+        for (const WaylandProtocolInspector::RegistryGlobal &global : std::as_const(m_globals)) {
+            output.append(makeRegistryGlobalMessage(registryId, global.name, global.interfaceName, global.version));
+        }
+    }
+
+    QVector<WaylandProtocolInspector::RegistryGlobal> m_globals;
+    QByteArray m_buffer;
+    QSet<uint32_t> m_registryObjectIds;
+};
+
 int runProtocolFilterSelfTest()
 {
     constexpr uint32_t RegistryId = 2;
@@ -472,6 +541,27 @@ int runProtocolFilterSelfTest()
         || containsInterface(panelGlobals, QStringLiteral("zwp_input_method_v1"))
         || !containsInterface(panelGlobals, QStringLiteral("wl_compositor"))) {
         qCritical() << "Wayland protocol filter self-test failed: KDE OSK panel registry projection is incorrect.";
+        return 1;
+    }
+
+    constexpr uint32_t PanelRegistryId = 7;
+    PanelBranchEndpoint panelBranch(panelGlobals);
+    QByteArray panelGetRegistryPayload;
+    appendUint32(panelGetRegistryPayload, PanelRegistryId);
+    const QByteArray panelGetRegistry = makeWaylandMessage(WlDisplayObjectId, WlDisplayGetRegistryOpcode, panelGetRegistryPayload);
+    QByteArray panelRegistryOutput;
+    panelBranch.receive(panelGetRegistry.constData(), panelGetRegistry.size(), panelRegistryOutput);
+
+    const QByteArray expectedPanelRegistry = makeRegistryGlobalMessage(PanelRegistryId,
+                                                                       CompositorGlobalName,
+                                                                       QStringLiteral("wl_compositor"),
+                                                                       6)
+        + makeRegistryGlobalMessage(PanelRegistryId,
+                                    InputPanelGlobalName,
+                                    QStringLiteral("zwp_input_panel_v1"),
+                                    1);
+    if (panelRegistryOutput != expectedPanelRegistry) {
+        qCritical() << "Wayland protocol filter self-test failed: panel branch registry handshake is incorrect.";
         return 1;
     }
 
