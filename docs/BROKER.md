@@ -28,8 +28,11 @@ kde-osk-kwin-broker
 
 The first broker milestone is intentionally conservative: when KWin starts the
 broker, the broker validates that it was launched in a Wayland input-method
-environment, starts or waits for stock `fcitx5`, and hands KWin's Wayland
-input-method socket to fcitx5 through fcitx5's public D-Bus controller API.
+environment, starts or waits for stock `fcitx5`, and delegates a broker-owned
+Wayland proxy socket to fcitx5 through fcitx5's public D-Bus controller API.
+At this stage the proxy is byte-transparent; it exists so the broker stays in
+the data path before later protocol-level splitting gives `zwp_input_method_v1`
+to fcitx5 while keeping the trusted `zwp_input_panel_v1` branch for KDE OSK.
 
 The old `exec` delegation path is kept as an explicit compatibility mode with
 `--exec-fcitx5`.
@@ -69,8 +72,12 @@ input to fcitx5 while selected.
 3. Refactor the existing SDDM input-method/input-panel code into reusable
    building blocks.
 4. Add `kde-osk-input-panel` for direct real-machine KWin input-panel testing.
-5. Connect a KDE OSK input-panel process to the resident broker's visibility and
+5. Put the resident broker in the Wayland socket data path with a transparent
+   proxy while preserving stock fcitx5 behavior.
+6. Upgrade the proxy into a protocol splitter for the fcitx5 input-method branch
+   and the KDE OSK input-panel branch.
+7. Connect a KDE OSK input-panel process to the resident broker's visibility and
    hardware-keyboard policy.
-6. Add secure-input mode based on input-method content type.
-7. Keep the existing SDDM greeter backend separate, because SDDM runs before the
+8. Add secure-input mode based on input-method content type.
+9. Keep the existing SDDM greeter backend separate, because SDDM runs before the
    user's fcitx5 session exists.
